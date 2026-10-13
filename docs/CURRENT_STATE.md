@@ -1,4 +1,4 @@
-﻿# Current state — fresh-session handoff
+# Current state — fresh-session handoff
 
 Last inspected and verified: **2026-10-13**, Europe/Istanbul.
 
@@ -6,12 +6,12 @@ Last inspected and verified: **2026-10-13**, Europe/Istanbul.
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. Preserve uncommitted Milestone 4 work. No second commit,
+verification are authoritative. Preserve uncommitted Milestone 5A work. No new commit,
 push, branch rename, history rewrite, deletion, or deployment is authorized.
 
 ## Git baseline
 
-The user approved and this session created exactly one local root commit on `master`:
+The local root commit on `master` is:
 `c8c3330fe7e8a4d15f73208a52d3fdd24250c534`
 
 Message: `Initial baseline: Universal AI Factory milestones 1–3`.
@@ -22,18 +22,53 @@ and whitespace checks passed. Evidence was read and contains nonsensitive task-l
 Configuration contains no API key; launch settings use localhost, and the UserSecretsId is
 configuration metadata, not a credential. Pattern checks are not a comprehensive security audit.
 Build artifacts, IDE state, test output, logs, local secrets, and private keys are ignored.
-Git was clean immediately after the baseline. Milestone 4 source, tests, docs, and three
-new evidence files remain uncommitted and unstaged. No push or history rewrite occurred.
+Milestone 4 was subsequently committed as b9ce70554d27404d0210169466875e19d5eacadb;
+the tree was clean when 5A began. Milestone 5A is now uncommitted. No push or history rewrite occurred.
 Git index writes required approved sandbox escalation; a per-command safe.directory exception
 was used for this workspace, without changing global Git configuration.
 
+## Milestone 5A current verification and scope
+
+See [Review Foundation](REVIEW_FOUNDATION.md) for schema, setup, security boundaries and evidence.
+Core has pure review state rules; Infrastructure has an internal IReviewStore implementation,
+immutable UTF-8 artifact bytes/SHA-256, version publication and optimistic concurrency, three
+PostgreSQL tables, append-only system events, and an EF migration. The API is not registered
+with this store; existing routes and workflows remain unchanged and ephemeral. No approval
+endpoint, OIDC, project membership authorization, decision writer, or command idempotency exists.
+The database CHECK allows PendingReview only. Stop after 5A; do not implement 5B without approval.
+
+Environment inspection found no Docker/PostgreSQL installation or listener and WSL reported not
+installed. Official PostgreSQL 18.6 portable binaries were used under ignored artifacts, with a
+SCRAM-authenticated loopback cluster at port 55432. No Windows service/Docker/WSL was installed.
+EF Core/Relational/Design 10.0.12 and Npgsql/provider 10.0.3 are pinned and restored successfully.
+
+Executed: InitialReviewFoundation migration on real PostgreSQL; repeat migration (already current);
+EF pending-model check (none). Full dotnet build using bin/Milestone5A/net10.0/: **0 warnings/errors**.
+Full dotnet test with FACTORY_REVIEW_TEST_CONNECTION set: **170 passed, 0 failed, 0 skipped**,
+including five real PostgreSQL cases with the restricted writer role. Without that variable,
+those five cases skip explicitly and a run is not full verification. No live OpenAI calls were made.
+
+Seven existing artifact versions and recomputed SHA-256 hashes survived a real database restart
+and separate client processes unchanged. The immutable trigger rejected owner-issued UPDATE;
+restricted-role tests reject mutation/DDL and persisted approval. Database administrator-level
+tamper resistance is not claimed. The API has not been connected to persistence, so API restart
+persistence is not claimed. See the setup report for resolved native-path/launcher/NuGet issues.
+The final full suite passed after restart with synchronized concurrent-publisher reads. The
+isolated database is stopped; its data is preserved under ignored artifacts for a later restart.
+
 ## Implemented architecture
+
+Closure review reran the full suite against the preserved PostgreSQL cluster: **170 passed,
+0 failed, 0 skipped**, build **0 warnings/errors**. All 19 candidates were reviewed; no secrets or
+unintended binary/build/data files were found. The index remains empty. See Review Foundation's
+closure section for the unsigned binary/checksum limitation and store-versus-database invariants.
+The cluster is stopped. Milestone 5A is ready for local commit approval within its limited scope.
 
 Five net10.0 projects: Factory.Api (Minimal API/DI/HTTP handling), Factory.Core (contracts,
 schemas, validators), Factory.Orchestration (AnalystAgent, ArchitectAgent, and sequential
 AnalysisArchitectureWorkflow), Factory.Infrastructure (OpenAI provider), Factory.Tests.
 Orchestration references Core only. OpenAI 2.14.0 remains confined to Infrastructure/API
-usage; package versions and IAgent/IModelProvider signatures are unchanged.
+usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10.0.12 and Npgsql/provider 10.0.3 to Infrastructure.
 
 | Milestone | Status and evidence |
 | --- | --- |
@@ -44,7 +79,7 @@ usage; package versions and IAgent/IModelProvider signatures are unchanged.
 
 RiftMind remains an intended sample application, not a dependency or implemented product.
 No implementation/test/review agent, code execution, MCP integration, GitHub automation,
-database, queue, generic workflow engine, authentication, or approval ledger was added.
+queue, generic workflow engine, authentication, or human approval ledger was added. 5A adds an internal PostgreSQL store and system publication audit.
 
 ## API and workflow
 
@@ -72,7 +107,7 @@ exception messages/objects; safe metadata includes IDs, stages, statuses, static
 exception type, and allowlisted provider request IDs. Standalone unexpected-error logging
 still logs exception objects and has not undergone a broader redaction audit.
 
-## Executed verification
+## Milestone 4 executed verification (historical)
 
 Final commands on 2026-10-13:
 
@@ -163,12 +198,12 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
 - Schemas/validators enforce structure and provenance, not semantic truth or completeness.
 - Live confirmed-source flow and intentionally induced provider failures remain unverified;
   deterministic tests cover positive confirmation and failure paths.
-- No persistent workflow status, resume, idempotency, authenticated ownership, or approval exists.
+- 5A stores review cases/artifacts/publication events, but no persistent workflow-run coordinator, resume, idempotency, authenticated ownership, or human approval exists.
 - Snapshotting isolates mutations after the initial synchronous copy, not concurrent writes
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- User approval is required before a second commit or push. Preserve all new/untracked files.
+- User approval is required before any further commit or push. Stop for 5A review before implementing 5B.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).

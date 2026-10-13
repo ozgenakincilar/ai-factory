@@ -21,7 +21,7 @@ The first application developed by the factory will be RiftMind AI, a League of 
 Follow the [AI Engineering Accuracy Protocol](docs/AI_ENGINEERING_ACCURACY_PROTOCOL.md).
 Before continuing development, read [Current State](docs/CURRENT_STATE.md) and
 [Architectural Decisions](docs/DECISIONS.md). These include the fresh-session handoff,
-executed verification, unresolved issues, and the uncommitted Milestone 4 working-tree caveat.
+executed verification, unresolved issues, and the uncommitted Milestone 5A working-tree caveat.
 
 1. Inspect existing code before proposing changes.
 2. Never claim tests passed unless they were executed successfully.
@@ -48,12 +48,14 @@ executed verification, unresolved issues, and the uncommitted Milestone 4 workin
   See [Milestone 3 evidence and limitations](docs/ARCHITECT_AGENT.md), including an initial unexplained
   live 502 followed by a successful 200 response. All architecture output remains proposed.
 - Milestone 4 sequential Analyst → Architect workflow is implemented with IDs, snapshots, explicit review status, safe partial results, and deterministic/live verification. See [Workflow](docs/WORKFLOW.md).
-- Latest verification: build succeeded with 0 warnings/errors; 155 tests passed, 0 failed, 0 skipped.
+- Latest verification: build succeeded with 0 warnings/errors; 170 tests passed, 0 failed, 0 skipped (including 5 real PostgreSQL tests).
+
+- Milestone 5A adds an internal persistent review foundation, with no approval endpoints or API database registration. See [Review Foundation](docs/REVIEW_FOUNDATION.md).
 
 ## Immediate Priority
 
 Analyst and Architect Structured Outputs each have a verified successful live sample;
-the first Architect attempt returned 502 with unresolved cause. Milestone 4 had an initial unexplained 500 followed by a verified live 200. Preserve the uncommitted Milestone 4 work; no second commit or push is authorized.
+the first Architect attempt returned 502 with unresolved cause. Milestone 4 had an initial unexplained 500 followed by a verified live 200. Milestone 4 is committed as b9ce705. Milestone 5A persistence is uncommitted; no commit, push, or Milestone 5B work is authorized.
 Preserve IModelProvider and the distinction between confirmed requirements, suggestions, and assumptions.
 Keep verification evidence and remaining limitations current as development continues.
 Do not refactor unrelated components.

@@ -31,9 +31,9 @@ for required working rules.
 - Authenticated approval gates, persistent approval records, project ownership validation.
 - Implementation, test, review, and pull-request agents.
 - Sandboxed command execution, MCP tool integration, GitHub automation.
-- Additional LLM providers, persistent storage, queues, dynamic multi-agent orchestration.
+- Additional LLM providers, persistent workflow coordination, queues, dynamic multi-agent orchestration. Review artifact storage is implemented in 5A.
 - Broader logging audit and reliability evaluation. Workflow HTTP cancellation propagation is now integration-tested.
-- Further commits and pushes: require explicit user approval. The approved local Milestone 1–3 baseline exists; Milestone 4 is uncommitted.
+- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is uncommitted.
 
 ## Interpretation rules
 
@@ -58,9 +58,33 @@ behaviors, not a root-cause fix or general reliability. Keep facts, recommendati
 | Explicit empty-analysis boundary | Analyst permits zero requirements; Architect does not. Return 422 with static code and retained analysis; skip Architect without weakening either validator. |
 | SDK-neutral exception wrapper carrying progress | Core/Orchestration remain provider-neutral; API classifies SDK errors and emits safe correlated metadata. Unexpected failures remain 500. |
 | Cancellation is a result at the workflow boundary | Preserve ID/progress and log 499. A disconnected client may receive no response; unrelated cancellation exceptions remain failures. |
-| Local baseline only | Approved root commit c8c3330fe7e8a4d15f73208a52d3fdd24250c534 contains Milestones 1–3 plus reviewed .gitignore. Milestone 4 remains uncommitted; no push or rewrite. |
+| Local baseline only | Approved root commit c8c3330fe7e8a4d15f73208a52d3fdd24250c534 contains Milestones 1–3 plus reviewed .gitignore. Milestone 4 was later committed as b9ce705; no push or rewrite. |
 
 The first workflow live attempt returned 500 at Analyst with no accepted artifacts. Its cause
 is unresolved. A second explicit attempt outside the restricted sandbox succeeded; that is not
 proof the first failure was caused by the sandbox. See [CURRENT_STATE.md](CURRENT_STATE.md)
 and [WORKFLOW.md](WORKFLOW.md) for executed results, evidence, and limitations.
+
+## Milestone 5A decisions (2026-10-13)
+
+- Implement the approved persistence phase only: three tables (ReviewCases, ArtifactVersions,
+  PublicationEvents). Identity/membership, workflow-run coordination, actual decision audit and
+  idempotency receipts await 5B; do not simulate authenticated users in their absence.
+- Keep IReviewStore internal to application composition, unregistered in the API. This preserves
+  existing behavior and prevents an unauthenticated approval or artifact-publishing endpoint.
+- Store immutable exact JSON bytes in bytea with format/validator versions, input evidence,
+  source workflow, proposed outputs and SHA-256. Use database hash CHECK, immutable triggers,
+  restrictive runtime grants, and application verification; DB administrators remain trusted.
+- Use an explicit bigint Revision concurrency token and one transaction for the case update,
+  artifact and publication event. A deferred current-artifact FK checks commit consistency.
+  Domain terminal-state rules exist, but a 5A CHECK forbids stored terminal decisions.
+- Pin EF Core/Relational/Design 10.0.12 and Npgsql/provider 10.0.3; use a standalone design-time
+  context so migrations do not require API/OpenAI startup. Apply migrations explicitly.
+- Docker and WSL were absent. Use an isolated official PostgreSQL 18.6 Windows binary cluster
+  for executed verification; do not install OS components/services. Preserve data under ignored
+  artifacts and use only loopback/SCRAM locally. Production provisioning remains unverified.
+- Persisted artifact provenance is consistency-validated, not authenticated origin. Callers of
+  the internal store are trusted until 5B supplies identity and authorization. Approval never
+  modifies requirement provenance or automatically executes code.
+
+See [Review Foundation](REVIEW_FOUNDATION.md) for real database results and limitations.
