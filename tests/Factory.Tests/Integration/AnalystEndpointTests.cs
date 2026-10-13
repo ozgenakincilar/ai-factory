@@ -1,4 +1,4 @@
-﻿using System.ClientModel;
+using System.ClientModel;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -25,7 +25,7 @@ public class AnalystEndpointTests
     public async Task Post_ValidOutput_ReturnsTypedAnalysisAndStringEnums()
     {
         using var factory = new ApiFactory(new StubProvider());
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var response = await client.PostAsJsonAsync("/api/agents/analyst", Request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
@@ -45,7 +45,7 @@ public class AnalystEndpointTests
     public async Task Post_UnusableModelOutput_ReturnsSafeFailure(string scenario, int status, string failureKind)
     {
         using var factory = new ApiFactory(new StubProvider(scenario));
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var response = await client.PostAsJsonAsync("/api/agents/analyst", Request);
         Assert.Equal(status, (int)response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -62,7 +62,7 @@ public class AnalystEndpointTests
     {
         var provider = new StubProvider();
         using var factory = new ApiFactory(provider);
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         var request = duplicateSources
             ? Request with { ConfirmedRequirements = [new("same", "A"), new("same", "B")] }
             : Request with { Task = "" };
@@ -75,7 +75,7 @@ public class AnalystEndpointTests
     public async Task Post_ExplicitConfirmation_IsBoundAndValidated()
     {
         using var factory = new ApiFactory(new StubProvider("unsupportedConfirmation"));
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var response = await client.PostAsJsonAsync("/api/agents/analyst", Request with
         {
             ConfirmedRequirements = [new("USER-1", "Add tasks")]
@@ -89,7 +89,7 @@ public class AnalystEndpointTests
     public async Task Post_ApiException_Returns502WithoutUpstreamMessage()
     {
         using var factory = new ApiFactory(new StubProvider("apiError"));
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var response = await client.PostAsJsonAsync("/api/agents/analyst", Request);
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
@@ -133,6 +133,7 @@ public class AnalystEndpointTests
         {
             // Tests do not read Development secrets or contact OpenAI.
             builder.UseEnvironment("Testing");
+            TestSecurity.Configure(builder);
             // Avoid machine-wide Windows Event Log writes from sandboxed tests.
             builder.ConfigureLogging(logging => logging.ClearProviders().AddConsole());
             builder.UseSetting("OpenAI:ApiKey", "synthetic-test-credential");

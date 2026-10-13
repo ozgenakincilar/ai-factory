@@ -28,12 +28,12 @@ for required working rules.
 
 ## Deferred work (not implemented or approved by this document)
 
-- Authenticated approval gates, persistent approval records, project ownership validation.
+- Human approval decision gates and persistent decision records. Authentication and project membership authorization are implemented in 5B.1.
 - Implementation, test, review, and pull-request agents.
 - Sandboxed command execution, MCP tool integration, GitHub automation.
 - Additional LLM providers, persistent workflow coordination, queues, dynamic multi-agent orchestration. Review artifact storage is implemented in 5A.
 - Broader logging audit and reliability evaluation. Workflow HTTP cancellation propagation is now integration-tested.
-- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is uncommitted.
+- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is uncommitted.
 
 ## Interpretation rules
 
@@ -88,3 +88,23 @@ and [WORKFLOW.md](WORKFLOW.md) for executed results, evidence, and limitations.
   modifies requirement provenance or automatically executes code.
 
 See [Review Foundation](REVIEW_FOUNDATION.md) for real database results and limitations.
+
+## Milestone 5B.1 decisions (2026-10-13)
+
+- Use pinned JwtBearer 10.0.12 and local Keycloak 26.8.0 with the existing Java 25 installation.
+  No Docker/WSL installation. Keycloak-specific token-profile checks stay at the API boundary.
+- Validate issuer/audience/signature/lifetime and access-token semantics, plus hardcoded client
+  classification. Identity is issuer/subject, never a request reviewer ID or email. IdP administrators
+  remain trusted; role claims cannot create Factory membership.
+- Require resource authorization for the actual ProjectId on all three generation routes. Keep
+  successful payloads unchanged; anonymous access deliberately becomes 401. Health remains public.
+- Add Projects, Principals and ProjectMemberships in access schema with active flags and Revision
+  concurrency. Composite kind FK and CHECK prevent Service Reviewer grants. Use a separate SELECT-only
+  API login; operator-only provisioning supplies explicit memberships. No online admin or enrollment API.
+- Keep review artifacts and their PendingReview-only constraint unchanged. Generator and Reviewer are
+  independent grants. Reviewer eligibility exists without a decision endpoint or execution permission.
+- Permit HTTP discovery only for the exact Development loopback issuer; reject remote transport for
+  operations using that issuer. Production requires HTTPS. No token propagation to agent/model inputs.
+- Use explicit migrations and per-request membership reads. Cached JWT signing keys permit offline
+  validation; no introspection or instantaneous IdP-side token revocation is claimed. Missing validation
+  material and unavailable membership storage fail closed. See [Authentication](AUTHENTICATION.md).

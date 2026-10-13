@@ -1,4 +1,4 @@
-﻿using System.ClientModel;
+using System.ClientModel;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -42,7 +42,7 @@ public class ArchitectEndpointTests
     public async Task ValidAnalysis_ReturnsTypedProposalWithPreservedProvenance()
     {
         using var factory = new ArchitectFactory(new ArchitectStub());
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var response = await client.PostAsJsonAsync("/api/agents/architect", ArchitectSamples.Request, Options());
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<AgentResult>(Options());
@@ -60,7 +60,7 @@ public class ArchitectEndpointTests
     {
         var provider = new ArchitectStub();
         using var factory = new ArchitectFactory(provider);
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         var request = scenario == "missing" ? ArchitectSamples.Request with { Analysis = null }
             : ArchitectSamples.Request with { ConfirmedRequirements = null };
         using var response = await client.PostAsJsonAsync("/api/agents/architect", request, Options());
@@ -98,7 +98,7 @@ public class ArchitectEndpointTests
             }
         };
         using var factory = new ArchitectFactory(provider);
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var response = await client.PostAsJsonAsync("/api/agents/architect", ArchitectSamples.Request, Options());
         Assert.Equal(expectedStatus, (int)response.StatusCode);
         var json = await response.Content.ReadAsStringAsync();
@@ -124,6 +124,7 @@ public class ArchitectEndpointTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
+            TestSecurity.Configure(builder);
             builder.ConfigureLogging(logging => logging.ClearProviders().AddConsole());
             builder.UseSetting("OpenAI:ApiKey", "synthetic-test-credential");
             builder.UseSetting("OpenAI:Model", "gpt-4o-mini");

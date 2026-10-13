@@ -1,5 +1,11 @@
 # Milestone 5A — Persistent review foundation
 
+This document records the 5A implementation and historical verification. 5A was committed as
+`b3e95f479c2c38358a3c46b3776c2004e5618880`. Subsequent 5B.1 authentication and project
+authorization are described in [Authentication](AUTHENTICATION.md); review decision persistence
+remains absent and the store remains unregistered in API generation. The historical no-authentication
+statements below describe the 5A boundary, not the current API.
+
 Implemented scope: pure approval state rules, PostgreSQL persistence for review cases and
 immutable whole-package versions, SHA-256 verification, append-only publication audit,
 explicit transactions, optimistic concurrency, migrations, and real database tests.

@@ -27,7 +27,7 @@ public class WorkflowEndpointTests
             throw new InvalidOperationException();
         }};
         using var factory = new WorkflowFactory(provider);
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         using var cts = new CancellationTokenSource();
         var pending = client.PostAsJsonAsync("/api/workflows/analysis-architecture", WorkflowTests.Request, cts.Token);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -67,7 +67,7 @@ public class WorkflowEndpointTests
             });
         }};
         using var factory = new WorkflowFactory(provider);
-        using var client = factory.CreateClient();
+        using var client = TestSecurity.Client(factory);
         var request = scenario == "input" ? WorkflowTests.Request with { Task = "" } : WorkflowTests.Request;
         using var response = await client.PostAsJsonAsync("/api/workflows/analysis-architecture", request);
         Assert.Equal(expectedStatus, (int)response.StatusCode);
@@ -92,6 +92,7 @@ public class WorkflowEndpointTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
+            TestSecurity.Configure(builder);
             builder.UseSetting("OpenAI:ApiKey", "synthetic-test-credential");
             builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(Logs));
             builder.ConfigureServices(services =>

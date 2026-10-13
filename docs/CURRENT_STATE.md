@@ -6,7 +6,7 @@ Last inspected and verified: **2026-10-13**, Europe/Istanbul.
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. Preserve uncommitted Milestone 5A work. No new commit,
+verification are authoritative. Preserve uncommitted Milestone 5B.1 work. No new commit,
 push, branch rename, history rewrite, deletion, or deployment is authorized.
 
 ## Git baseline
@@ -23,11 +23,36 @@ Configuration contains no API key; launch settings use localhost, and the UserSe
 configuration metadata, not a credential. Pattern checks are not a comprehensive security audit.
 Build artifacts, IDE state, test output, logs, local secrets, and private keys are ignored.
 Milestone 4 was subsequently committed as b9ce70554d27404d0210169466875e19d5eacadb;
-the tree was clean when 5A began. Milestone 5A is now uncommitted. No push or history rewrite occurred.
+the tree was clean when 5A began. Milestone 5A was committed as b3e95f479c2c38358a3c46b3776c2004e5618880. No push or history rewrite occurred.
 Git index writes required approved sandbox escalation; a per-command safe.directory exception
 was used for this workspace, without changing global Git configuration.
 
-## Milestone 5A current verification and scope
+## Milestone 5B.1 current verification and scope
+
+See [Authentication](AUTHENTICATION.md) for implementation, setup, exact security boundaries and
+executed evidence. All three generation endpoints now require a validated API access token and
+Factory-owned active project Generator membership. Health remains anonymous. Successful payloads
+and agent contracts are preserved. Human/Service classification requires agreement between the
+Keycloak client policy and Factory principal; Service Reviewer grants are denied in API and DB.
+No enrollment, membership management, approval decision or 5B.2 endpoint was added.
+
+Keycloak 26.8.0 runs locally using Java 25, with a Development-only exact loopback HTTP issuer;
+PostgreSQL has three additive access tables and a separate read-only API login. Migrations passed
+against existing and fresh databases; model drift check reported none. Full build: **0 warnings/errors**.
+Full suite: **205 passed, 0 failed, 0 skipped**, including nine real PostgreSQL and two live Keycloak
+cases. Human browser login used real headless Edge with PKCE/state and independently validated nonce;
+service client credentials were verified separately. No live OpenAI generation was performed.
+
+5B.1 changes are uncommitted and unstaged. Stop for review; no commit, push or 5B.2 is authorized.
+Local Keycloak SHA-1 matched the publisher checksum; SHA-256 is a local fingerprint, not a verified
+publisher signature. PostgreSQL's unsigned/unverified-publisher-checksum limit remains documented.
+Historical HTTP 500/502 causes remain unresolved. Test dependencies and skipped-test behavior are
+explicitly documented. An existing API process on 5050 was not modified or stopped.
+The dedicated Keycloak/PostgreSQL/browser/API verification listeners are stopped; data is preserved.
+The reviewed candidate manifest is 31 text files (11 modified, 20 new), recorded in AUTHENTICATION.md.
+Scoped secret/binary checks and git diff whitespace checks passed; the index is empty.
+
+## Milestone 5A verification and scope (historical)
 
 See [Review Foundation](REVIEW_FOUNDATION.md) for schema, setup, security boundaries and evidence.
 Core has pure review state rules; Infrastructure has an internal IReviewStore implementation,
@@ -35,7 +60,7 @@ immutable UTF-8 artifact bytes/SHA-256, version publication and optimistic concu
 PostgreSQL tables, append-only system events, and an EF migration. The API is not registered
 with this store; existing routes and workflows remain unchanged and ephemeral. No approval
 endpoint, OIDC, project membership authorization, decision writer, or command idempotency exists.
-The database CHECK allows PendingReview only. Stop after 5A; do not implement 5B without approval.
+The database CHECK allows PendingReview only. The following 5A evidence is historical; 5B.1 is authorized, but 5B.2 and decision endpoints are not.
 
 Environment inspection found no Docker/PostgreSQL installation or listener and WSL reported not
 installed. Official PostgreSQL 18.6 portable binaries were used under ignored artifacts, with a
@@ -62,7 +87,7 @@ Closure review reran the full suite against the preserved PostgreSQL cluster: **
 0 failed, 0 skipped**, build **0 warnings/errors**. All 19 candidates were reviewed; no secrets or
 unintended binary/build/data files were found. The index remains empty. See Review Foundation's
 closure section for the unsigned binary/checksum limitation and store-versus-database invariants.
-The cluster is stopped. Milestone 5A is ready for local commit approval within its limited scope.
+The cluster is stopped. Milestone 5A was subsequently committed as b3e95f4.
 
 Five net10.0 projects: Factory.Api (Minimal API/DI/HTTP handling), Factory.Core (contracts,
 schemas, validators), Factory.Orchestration (AnalystAgent, ArchitectAgent, and sequential
@@ -76,16 +101,18 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 2 | Strict typed analysis and provenance validation; historical live 200, see STRUCTURED_OUTPUTS.md |
 | 3 | Traceable proposed architecture; historical live 502 then 200, first cause unresolved, see ARCHITECT_AGENT.md |
 | 4 | Sequential workflow, per-execution IDs, explicit statuses, snapshots, cancellation and safe partial progress; see WORKFLOW.md |
+| 5A | Committed persistent review foundation; see REVIEW_FOUNDATION.md |
+| 5B.1 | Uncommitted JWT authentication and project authorization; see AUTHENTICATION.md |
 
 RiftMind remains an intended sample application, not a dependency or implemented product.
 No implementation/test/review agent, code execution, MCP integration, GitHub automation,
-queue, generic workflow engine, authentication, or human approval ledger was added. 5A adds an internal PostgreSQL store and system publication audit.
+queue, generic workflow engine or human approval ledger was added. 5A adds an internal PostgreSQL store and system publication audit; 5B.1 adds authentication and project authorization.
 
 ## API and workflow
 
 - GET /health: local application health, not provider availability.
-- POST /api/agents/analyst and /api/agents/architect: existing contracts/behavior retained.
-- POST /api/workflows/analysis-architecture: WorkflowRequest to WorkflowResult.
+- POST /api/agents/analyst and /api/agents/architect: contracts retained; 5B.1 adds authentication/project authorization.
+- POST /api/workflows/analysis-architecture: WorkflowRequest to WorkflowResult; 5B.1 adds authentication/project authorization.
 
 The workflow snapshots project ID, task, context, and caller evidence before its first await.
 Analyst runs first; its validated typed analysis and original evidence/context feed Architect.
@@ -184,7 +211,7 @@ Both verification API processes were stopped; unrelated processes were not stopp
 A future authorized local run can use:
 
 ```powershell
-dotnet run --project src/Factory.Api --launch-profile http --no-build -p:OutputPath=bin/Milestone4Verification/net10.0/ -- --urls http://127.0.0.1:5168
+./scripts/Run-FactoryApi.ps1
 ```
 
 Check the port first. Development uses existing User Secrets; do not enumerate credentials.
@@ -198,12 +225,12 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
 - Schemas/validators enforce structure and provenance, not semantic truth or completeness.
 - Live confirmed-source flow and intentionally induced provider failures remain unverified;
   deterministic tests cover positive confirmation and failure paths.
-- 5A stores review cases/artifacts/publication events, but no persistent workflow-run coordinator, resume, idempotency, authenticated ownership, or human approval exists.
+- 5A stores review cases/artifacts/publication events and 5B.1 authenticates project operations. No persistent workflow-run coordinator, resume, idempotency or human approval decision exists.
 - Snapshotting isolates mutations after the initial synchronous copy, not concurrent writes
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- User approval is required before any further commit or push. Stop for 5A review before implementing 5B.
+- User approval is required before any further commit or push. Stop for 5B.1 review before any 5B.2 work.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).

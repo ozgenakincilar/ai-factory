@@ -42,6 +42,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
     protected override void OnModelCreating(ModelBuilder model)
     {
         model.HasDefaultSchema("review");
+        Factory.Infrastructure.Authorization.AccessModel.Configure(model);
         model.Entity<ReviewCaseRow>(b =>
         {
             b.ToTable("ReviewCases", t =>

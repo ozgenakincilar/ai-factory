@@ -1,6 +1,7 @@
 
 using System.ClientModel;
 using Factory.Api;
+using Factory.Api.Security;
 using Factory.Orchestration.Workflows;
 using Factory.Core.Agents;
 using Factory.Core.Models;
@@ -83,8 +84,12 @@ builder.Services.AddTransient<IAgent>(sp =>
 // 4. BUILD APPLICATION
 // ======================================================
 
+builder.AddFactorySecurity();
 var app = builder.Build();
-app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync);
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
+    .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 
 // ======================================================
 // 5. HEALTH ENDPOINT
@@ -98,7 +103,7 @@ app.MapGet("/health", () =>
         application = "Universal AI Factory",
         environment = app.Environment.EnvironmentName
     });
-});
+}).AllowAnonymous();
 
 // ======================================================
 // 6. ANALYST AGENT ENDPOINT
@@ -107,12 +112,14 @@ app.MapGet("/health", () =>
 app.MapPost("/api/agents/analyst", (
     AgentRequest request,
     AnalystAgent agent,
-    CancellationToken cancellationToken) => ExecuteAgent(request, agent, cancellationToken));
+    CancellationToken cancellationToken) => ExecuteAgent(request, agent, cancellationToken))
+    .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 
 app.MapPost("/api/agents/architect", (
     AgentRequest request,
     ArchitectAgent agent,
-    CancellationToken cancellationToken) => ExecuteAgent(request, agent, cancellationToken));
+    CancellationToken cancellationToken) => ExecuteAgent(request, agent, cancellationToken))
+    .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 
 async Task<IResult> ExecuteAgent(AgentRequest request, IAgent agent, CancellationToken cancellationToken)
 {

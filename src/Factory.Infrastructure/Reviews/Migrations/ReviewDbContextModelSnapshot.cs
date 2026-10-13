@@ -23,6 +23,105 @@ namespace Factory.Infrastructure.Reviews.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Factory.Infrastructure.Authorization.PrincipalRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Issuer", "Subject")
+                        .IsUnique();
+
+                    b.ToTable("Principals", "access", t =>
+                        {
+                            t.HasCheckConstraint("principal_kind", "\"Kind\" IN ('Human', 'Service')");
+
+                            t.HasCheckConstraint("principal_valid", "length(btrim(\"Issuer\")) > 0 AND length(btrim(\"Subject\")) > 0 AND \"Revision\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Factory.Infrastructure.Authorization.ProjectMembershipRow", b =>
+                {
+                    b.Property<string>("ProjectId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PrincipalKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ProjectId", "PrincipalId", "Role");
+
+                    b.HasIndex("PrincipalId", "PrincipalKind");
+
+                    b.ToTable("ProjectMemberships", "access", t =>
+                        {
+                            t.HasCheckConstraint("membership_role", "\"Role\" IN ('Reader', 'Generator', 'Reviewer') AND \"Revision\" > 0");
+
+                            t.HasCheckConstraint("reviewer_human_only", "\"Role\" <> 'Reviewer' OR \"PrincipalKind\" = 'Human'");
+                        });
+                });
+
+            modelBuilder.Entity("Factory.Infrastructure.Authorization.ProjectRow", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Projects", "access", t =>
+                        {
+                            t.HasCheckConstraint("project_valid", "length(btrim(\"Id\")) > 0 AND \"Revision\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Factory.Infrastructure.Reviews.ArtifactVersionRow", b =>
                 {
                     b.Property<Guid>("CaseId")
@@ -119,6 +218,22 @@ namespace Factory.Infrastructure.Reviews.Migrations
 
                             t.HasCheckConstraint("case_version_positive", "\"CurrentVersion\" > 0 AND \"Revision\" > 0");
                         });
+                });
+
+            modelBuilder.Entity("Factory.Infrastructure.Authorization.ProjectMembershipRow", b =>
+                {
+                    b.HasOne("Factory.Infrastructure.Authorization.ProjectRow", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Factory.Infrastructure.Authorization.PrincipalRow", null)
+                        .WithMany()
+                        .HasForeignKey("PrincipalId", "PrincipalKind")
+                        .HasPrincipalKey("Id", "Kind")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Factory.Infrastructure.Reviews.ArtifactVersionRow", b =>
