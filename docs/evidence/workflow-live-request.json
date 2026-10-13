@@ -1,0 +1,8 @@
+{
+    "confirmedRequirements":  [
+
+                              ],
+    "context":  "No technology stack, storage, accounts, or notifications have been selected. All generated ideas are proposals for human review.",
+    "task":  "Analyze and propose a small task-list prototype where a user can add a task with a title and mark it complete. Keep analysis to two requirements and architecture to one or two components, one technology decision, one alternative, and one ADR.",
+    "projectId":  "workflow-verification"
+}

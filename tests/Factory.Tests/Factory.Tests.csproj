@@ -29,6 +29,7 @@
   <ItemGroup>
     <None Include="..\..\docs\evidence\analyst-live-*.json" Link="Evidence\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\docs\evidence\architect-live-*.json" Link="Evidence\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\evidence\workflow-live-*.json" Link="Evidence\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

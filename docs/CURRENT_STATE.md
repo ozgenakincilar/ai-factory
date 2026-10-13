@@ -4,175 +4,171 @@ Last inspected and verified: **2026-10-13**, Europe/Istanbul.
 
 ## Start here
 
-Read [AGENTS.md](../AGENTS.md), the [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
-this document, and [DECISIONS.md](DECISIONS.md) before editing. Repository files and executed
-verification are authoritative. This handoff does not authorize new features, commits, pushes,
-merges, destructive operations, or production deployment.
+Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
+this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
+verification are authoritative. Preserve uncommitted Milestone 4 work. No second commit,
+push, branch rename, history rewrite, deletion, or deployment is authorized.
 
-Handoff checks: all local links in these handoff documents and AGENTS.md resolve. Review and
-credential-pattern scanning of the 10 documentation/evidence files identified no credentials
-or sensitive data. An initial token-pattern hit was verified to be a substring of a generated
-risk ID, not a credential. Pattern scanning is a review aid, not a comprehensive security audit.
+## Git baseline
 
-**Git caveat:** inspection found no tracked files and no committed HEAD. `git status --short`
-shows AGENTS.md, the solution, docs, src, and tests as untracked. Both `git diff` and
-`git diff --cached` are empty because nothing is tracked, not because the project is committed
-or clean. There is no commit SHA to identify this state. Preserve the working directory.
-Do not run clean/reset/delete or create a baseline commit without approval.
+The user approved and this session created exactly one local root commit on `master`:
+`c8c3330fe7e8a4d15f73208a52d3fdd24250c534`
 
-## Mission and architecture
+Message: `Initial baseline: Universal AI Factory milestones 1–3`.
 
-Build a reusable, project-agnostic AI Software Factory on .NET 10. The long-term workflow is
-requirements analysis, architecture, implementation, testing, review, and preparation of pull
-requests with human approval. RiftMind AI (League of Legends coaching) is the first intended
-sample application, not a hard-coded factory dependency and not an implemented product here.
+The baseline contains 49 reviewed text files, including .gitignore and four historical
+JSON evidence files. Staged file manifest, binary/artifact checks, sensitive-pattern checks,
+and whitespace checks passed. Evidence was read and contains nonsensitive task-list examples.
+Configuration contains no API key; launch settings use localhost, and the UserSecretsId is
+configuration metadata, not a credential. Pattern checks are not a comprehensive security audit.
+Build artifacts, IDE state, test output, logs, local secrets, and private keys are ignored.
+Git was clean immediately after the baseline. Milestone 4 source, tests, docs, and three
+new evidence files remain uncommitted and unstaged. No push or history rewrite occurred.
+Git index writes required approved sandbox escalation; a per-command safe.directory exception
+was used for this workspace, without changing global Git configuration.
 
-Solution: `UniversalAiFactory.sln`. All five projects target net10.0.
+## Implemented architecture
 
-| Project | Implemented responsibility / references |
+Five net10.0 projects: Factory.Api (Minimal API/DI/HTTP handling), Factory.Core (contracts,
+schemas, validators), Factory.Orchestration (AnalystAgent, ArchitectAgent, and sequential
+AnalysisArchitectureWorkflow), Factory.Infrastructure (OpenAI provider), Factory.Tests.
+Orchestration references Core only. OpenAI 2.14.0 remains confined to Infrastructure/API
+usage; package versions and IAgent/IModelProvider signatures are unchanged.
+
+| Milestone | Status and evidence |
 | --- | --- |
-| Factory.Api | Minimal API, configuration, DI, shared HTTP error handling; references Core, Orchestration, Infrastructure |
-| Factory.Core | Agent/model contracts, Analyst/Architect DTOs, strict schemas, business validators; no OpenAI dependency |
-| Factory.Orchestration | AnalystAgent and ArchitectAgent; references Core only |
-| Factory.Infrastructure | OpenAiModelProvider and safe credential-format validation; references Core, OpenAI 2.14.0 |
-| Factory.Tests | xUnit unit, SDK transport, WebApplicationFactory HTTP, and captured-response tests; references all projects |
+| 1 | Foundation, Analyst, ChatClient integration, safe credential-format validation |
+| 2 | Strict typed analysis and provenance validation; historical live 200, see STRUCTURED_OUTPUTS.md |
+| 3 | Traceable proposed architecture; historical live 502 then 200, first cause unresolved, see ARCHITECT_AGENT.md |
+| 4 | Sequential workflow, per-execution IDs, explicit statuses, snapshots, cancellation and safe partial progress; see WORKFLOW.md |
 
-API package Microsoft.AspNetCore.OpenApi and test package Microsoft.AspNetCore.Mvc.Testing
-are 10.0.12. Other test dependencies include xUnit 2.9.3, runner 3.1.4,
-Microsoft.NET.Test.Sdk 17.14.1, and coverlet.collector 6.0.4. See project files for source of truth.
+RiftMind remains an intended sample application, not a dependency or implemented product.
+No implementation/test/review agent, code execution, MCP integration, GitHub automation,
+database, queue, generic workflow engine, authentication, or approval ledger was added.
 
-## Milestones and evidence
+## API and workflow
 
-| Milestone | Implemented status | Evidence and limits |
-| --- | --- | --- |
-| Foundation / initial Analyst | Solution, health endpoint, OpenAI ChatClient provider, Analyst agent, key-format guard | An earlier malformed credential was detected without printing it. User subsequently reported a successful plain-text call. No credential values belong in the repository. |
-| Milestone 2 | Strict Structured Outputs, typed AnalysisResult, provenance validation, failure handling, HTTP tests | Recorded live HTTP 200 using gpt-4o-mini; two suggested requirements, zero confirmed. Historical final suite: 71 passes. See STRUCTURED_OUTPUTS.md and Analyst evidence files. |
-| Milestone 3 (current) | Architect agent, typed proposal, traceability/business validation, endpoint, tests | Final suite: 123 passes. First live call returned unexplained 502; second returned 200. Proposal remained proposed, with no confirmed constraints. See ARCHITECT_AGENT.md. |
+- GET /health: local application health, not provider availability.
+- POST /api/agents/analyst and /api/agents/architect: existing contracts/behavior retained.
+- POST /api/workflows/analysis-architecture: WorkflowRequest to WorkflowResult.
 
-**Milestone 3 implementation is complete within its documented scope.** This does not mean all
-production concerns are solved, every generated claim is accurate, or the first 502 is diagnosed.
-This handoff changes documentation only. No later milestone has been specified or implemented.
+The workflow snapshots project ID, task, context, and caller evidence before its first await.
+Analyst runs first; its validated typed analysis and original evidence/context feed Architect.
+Requirement IDs, statuses, source bindings, assumptions, and proposed architecture are preserved.
+No context/task prose can grant confirmation. Confirmation is caller assertion, not authenticated
+human approval. Each execution generates a GUID in the response body, X-Workflow-Id header,
+and safe completion/failure logs. Requests rejected by framework binding do not start execution.
 
-Evidence files, all nonsensitive task-list examples:
+Overall statuses: AwaitingHumanReview (generation succeeded), Failed, Cancelled. Agent stage
+statuses: NotStarted, Completed, Failed, Cancelled. Completed never means approved. Success
+always ends AwaitingHumanReview with architecture.status=proposed. No human pause between agents.
+Validated analysis is retained if Architect fails; invalid architecture is never returned.
+Empty requirements yield 422 and skip Architect. Input errors yield 400, refusals 422,
+unusable provider output/SDK exceptions 502, unexpected exceptions 500, observed cancellation 499.
+A disconnected client may not receive its cancellation body. No application-level retries.
 
-- [Analyst request](evidence/analyst-live-request.json) and [response](evidence/analyst-live-response.json).
-- [Architect request](evidence/architect-live-request.json) and [response](evidence/architect-live-response.json).
-- Architect input was copied from the actual Analyst response. It had no confirmed sources.
-- Captured-response tests validate these files offline; passing them is not a fresh live call.
-- The successful Architect response has two components, one technology decision, two alternatives,
-  two risks, one ADR, and zero confirmed constraints. All design bases are recommendations.
+The API owns SDK exception classification. Workflow logs omit request/output payloads and
+exception messages/objects; safe metadata includes IDs, stages, statuses, static diagnostics,
+exception type, and allowlisted provider request IDs. Standalone unexpected-error logging
+still logs exception objects and has not undergone a broader redaction audit.
 
-## Existing interfaces and request flow
+## Executed verification
 
-`IAgent`: Name and `Task<AgentResult> ExecuteAsync(AgentRequest, CancellationToken)`.
-`IModelProvider`: `Task<ModelResponse> GenerateAsync(ModelRequest, CancellationToken)`.
-Neither interface signature changed for Milestone 3.
-
-- AgentRequest: ProjectId, Task, Context, optional ConfirmedRequirements, optional Analysis.
-- AgentResult: Success, Output, optional Error, Analysis, FailureKind, Architecture.
-- ModelRequest: SystemPrompt, UserPrompt, optional ModelOutputSchema(Name, JsonSchema).
-- ModelResponse: Content, Model, Status (Completed, Refused, Incomplete, Empty).
-- Successful Output is canonical JSON, not Markdown; typed Analysis or Architecture is also returned.
-- JSON enum names are camelCase strings. Existing Analyst callers can omit the Architect input.
-
-AnalystAgent requests AnalysisJson.OutputSchema, parses AnalysisResult, and runs AnalysisValidator.
-Confirmation requires an explicit source ID plus exact ordinal description match against
-caller-supplied ConfirmedRequirements. Context/task text cannot confer confirmation. Nonconfirmed
-requirements must have null source IDs. Assumptions, risks, and questions are separate typed lists.
-
-ArchitectAgent revalidates the input analysis and requires at least one functional requirement.
-It snapshots the input, requests ArchitectureJson.OutputSchema, parses ArchitectureProposal,
-and runs ArchitectureValidator. Components/decisions/risks carry DesignBasis and RequirementTrace.
-Referenced statuses must match input; unconfirmed or assumption-backed bases must be recommendations.
-Confirmed constraints contain only validated confirmed requirement IDs. Every requirement needs
-component coverage; every technology decision needs alternatives, trade-offs, and exactly one ADR.
-Output is always proposed, with no approval or execution capability.
-
-OpenAiModelProvider sends ChatResponseFormat.CreateJsonSchemaFormat with strict=true, checks
-refusal/finish reason/empty content, and returns provider-neutral statuses. It does not parse domain
-models. There is no application-level automatic retry or JSON-mode fallback; SDK behavior is separate.
-
-## API and DI
-
-| Endpoint | Behavior |
-| --- | --- |
-| GET /health | Local application/environment health; does not prove OpenAI availability |
-| POST /api/agents/analyst | AgentRequest to typed Analyst result |
-| POST /api/agents/architect | AgentRequest with Analysis/evidence to typed proposed architecture |
-
-Both POST routes share ExecuteAgent in Program.cs. Invalid input: 400; refusal: 422;
-invalid/empty/incomplete model output or SDK API exception: 502; caller cancellation: 499;
-unexpected exceptions: 500. Invalid model output is not returned as accepted data.
-
-The provider and ChatClient are singletons; agents are transient. Unkeyed IAgent DI still resolves
-AnalystAgent. ArchitectAgent is injected directly into its route; there is no multi-agent dispatcher
-or automatic Analyst-to-Architect orchestration.
-
-## Current verification and local operation
-
-Re-executed during this handoff, on 2026-10-13:
+Final commands on 2026-10-13:
 
 ```powershell
-dotnet build -p:OutputPath=bin/Milestone3/net10.0/
-dotnet test -p:OutputPath=bin/Milestone3/net10.0/ --no-restore
+dotnet build -p:OutputPath=bin/Milestone4Verification/net10.0/
+dotnet test --no-restore -p:OutputPath=bin/Milestone4Verification/net10.0/
 ```
 
-**Build: 0 warnings, 0 errors. Tests: 123 passed, 0 failed, 0 skipped.**
-One of the 123 is the existing empty template test in UnitTest1.cs; the count is not a coverage
-percentage or a count of independently meaningful scenarios. No new live request was made for
-this documentation handoff.
+Build: **0 warnings, 0 errors**. Tests: **155 passed, 0 failed, 0 skipped**.
+All 123 baseline cases are retained, including one empty template test; 32 cases were added.
+Tests are deterministic and use fake providers/synthetic credentials. Captured-response tests
+validate saved evidence offline; they are not fresh provider requests.
 
-Tests use synthetic credentials and a Testing host; no real API calls are made by dotnet test.
-SDK transport tests inspect the serialized strict schemas. HTTP tests replace IModelProvider.
-Saved live response tests check typed parsing, canonical output, and provenance.
+New coverage includes sequence/schema selection, exact typed handoff, evidence mutation during
+execution, concurrent project isolation and unique IDs, partial failure, empty requirements,
+cancellation before/during/between stages, HTTP errors, safe logs and header/body correlation,
+and captured live success/failure validation. HTTP cancellation verifies provider cancellation
+and correlated 499 server diagnostics, not delivery of a body after disconnection.
 
-When an authorized task requires a live run, the previously used command is:
+## Live Milestone 4 verification
+
+### Closure review (2026-10-13)
+
+Re-read the rules/design documents, reviewed all five tracked-file diffs and all nine
+untracked files, and re-ran verification without source changes:
 
 ```powershell
-dotnet run --project src/Factory.Api --launch-profile http --no-build -p:OutputPath=bin/Milestone3/net10.0/ -- --urls http://127.0.0.1:5168
+dotnet build -p:OutputPath=bin/Milestone4Closure/net10.0/
+dotnet test --no-restore -p:OutputPath=bin/Milestone4Closure/net10.0/
 ```
 
-Development loads existing User Secrets. Keys are configured under OpenAI:ApiKey; model under
-OpenAI:Model (fallback gpt-4o-mini). Do not print/list secret values, copy them into docs, or change
-credentials as part of routine verification. Do not assume a fresh session has network/secret access.
-The earlier verification process was stopped; check current port/process state before starting one.
-Separate output directories avoid locked DLLs from another running API. Do not stop unrelated apps.
+Build: **0 warnings, 0 errors**. Tests: **155 passed, 0 failed, 0 skipped**.
+Content review and limited credential/machine-path/binary/artifact scanning of all 58
+tracked and nonignored untracked files found no findings. Generated outputs remain ignored;
+git diff --check passed. No new live call was made during closure. No source edits, staging,
+commit, or Milestone 5 work occurred. The proposed commit remains subject to explicit approval.
 
-Sandbox restore has previously failed at NuGet's signature endpoint and then succeeded with network
-approval. Windows Event Log writes also failed in sandboxed HTTP tests; test hosts use console logging.
-If Git rejects ownership, prior read-only inspection used a per-command `-c safe.directory=<workspace>`
-exception, not a global Git configuration change. Resolve the actual workspace path in the new session.
+Workflow diagnostics correlate 500/502 failures with workflow ID, stage, failure category,
+static validation diagnostics, and exception type; SDK failures also log status and an
+allowlisted upstream request ID when available. These support investigation, not a guarantee
+of root-cause identification: there are no stack traces, nested exception details, or raw
+payloads. Existing tests verify HTTP failure handling, ID correlation, and suppression of
+synthetic private messages; they do not exhaustively test every diagnostic field or header
+allowlist branch. Standalone agent endpoints have no workflow ID; returned validation codes
+must be retained by their caller because that path does not log failed AgentResult details.
+Both historical causes remain unresolved. These are documented diagnostic limits, not fixes.
 
-## Known issues, risks, and unverified assumptions
+### Previously executed live attempts
 
-- **Unresolved live failure:** the first Architect call returned 502. Its error body and model output
-  were not retained. Server inspection added no diagnosis. The second success does not explain it.
-  Static validation codes were added without relaxing rules. Do not invent a root cause.
-- Caller-confirmed evidence is not authenticated approval. Analysis origin and project ownership are
-  not independently verified. There is no authentication, authorization, approval ledger, or database.
-- Strict schema/provenance validation cannot prove free-text technical claims, semantic entailment,
-  performance, completeness, or suitability. Browser-storage choices in captured output are unverified
-  model recommendations, not decisions about the Factory's own architecture.
-- Real provider refusals, outages, rate limits, and truncation were not intentionally induced; tests
-  simulate them. Agent cancellation is tested; endpoint-level 499 cancellation is not integration-tested.
-- Positive confirmed-source architecture flow is tested synthetically; the live sample had suggestions only.
-- Core/Orchestration/Infrastructure Class1 files and the empty template test remain. No cleanup was authorized.
-- Unexpected-error HTTP handling still logs the exception object; safe SDK handling and validation errors
-  are narrower. Broader log-redaction guarantees have not been audited.
-- No committed baseline exists. Current files, including evidence used by tests, must survive session changes.
+Two explicit attempts used the same nonsensitive task-list request and existing Development
+configuration (gpt-4o-mini). Credentials were neither printed nor changed.
 
-## Next steps — recommendations, not implemented or newly authorized
+1. Sandboxed attempt: HTTP 500, WorkflowId `af8d6568-3e0d-49b5-9a12-53ccc6c21e9a`.
+   Failed at Analyst, Architect not started, no accepted artifacts. Safe error:
+   workflow_execution_failed. The original exception type was not captured. Cause remains
+   unresolved; sandbox networking is a possibility, not a verified diagnosis.
+2. After adding safe exception-type diagnostics, an explicitly authorized execution outside
+   the network-restricted sandbox returned HTTP 200, WorkflowId
+   `be1a8a36-6a99-4470-a2d5-3d9a1828e77a`. Header/body/log IDs matched. Both stages completed,
+   overall status awaitingHumanReview, architecture proposed. Two suggested requirements,
+   zero confirmed constraints. Two components, one technology decision, two alternatives,
+   two risks, one ADR. All design bases are recommendations.
 
-1. Start the fresh session by reading these documents, inspecting the actual files and Git state,
-   and agreeing with the user on the next milestone. Do not assume implementation-agent work is approved.
-2. Prioritize reliable diagnosis of any recurring Architect 502: capture safe application error category,
-   static validation code, and allowed request ID. Never log raw credentials or unrestricted provider payloads.
-3. Consider additional live samples and endpoint cancellation coverage when requested. Keep schema/provenance
-   checks strict; do not silently retry until a failure disappears or relabel suggestions as confirmed.
-4. Before executing future generated code, design human approval and isolation explicitly with user approval.
-   MCP tools, isolated execution, GitHub integration, implementation/review/test agents, persistence, and
-   multiple provider implementations are roadmap items, not current functionality.
-5. Create a Git baseline only after explicit approval and appropriate review of what would be included.
+Evidence: [request](evidence/workflow-live-request.json),
+[failed response](evidence/workflow-live-failed-response.json),
+[successful response](evidence/workflow-live-response.json). Content review and limited sensitive
+pattern scanning found no credentials or personal/machine-specific information in these files.
+The successful run does not explain the first failure or prove general reliability. The model
+returned two alternatives despite the request asking for one; exact requested cardinality is
+not a validator guarantee. React and other technology claims are unverified model proposals,
+not accepted Factory architecture or measured performance.
 
-For decision rationale, see [DECISIONS.md](DECISIONS.md). Detailed milestone reports remain
-[STRUCTURED_OUTPUTS.md](STRUCTURED_OUTPUTS.md) and [ARCHITECT_AGENT.md](ARCHITECT_AGENT.md).
+Both verification API processes were stopped; unrelated processes were not stopped.
+A future authorized local run can use:
+
+```powershell
+dotnet run --project src/Factory.Api --launch-profile http --no-build -p:OutputPath=bin/Milestone4Verification/net10.0/ -- --urls http://127.0.0.1:5168
+```
+
+Check the port first. Development uses existing User Secrets; do not enumerate credentials.
+Separate output directories avoid locked DLLs. Tests use Testing configuration and console/captured
+logging. Prior sandbox limitations include NuGet access and Windows Event Log permissions.
+
+## Remaining limitations and next work
+
+- Historical Architect 502 and first workflow 500 remain unresolved. Capture safe diagnostics
+  on recurrence; do not infer a cause from later success or silently retry to hide failures.
+- Schemas/validators enforce structure and provenance, not semantic truth or completeness.
+- Live confirmed-source flow and intentionally induced provider failures remain unverified;
+  deterministic tests cover positive confirmation and failure paths.
+- No persistent workflow status, resume, idempotency, authenticated ownership, or approval exists.
+- Snapshotting isolates mutations after the initial synchronous copy, not concurrent writes
+  during that copy. Treat input collections as stable while submitting a request.
+- Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
+  unrelated cleanup was deliberately excluded.
+- User approval is required before a second commit or push. Preserve all new/untracked files.
+
+See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
+[Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).

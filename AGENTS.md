@@ -21,7 +21,7 @@ The first application developed by the factory will be RiftMind AI, a League of 
 Follow the [AI Engineering Accuracy Protocol](docs/AI_ENGINEERING_ACCURACY_PROTOCOL.md).
 Before continuing development, read [Current State](docs/CURRENT_STATE.md) and
 [Architectural Decisions](docs/DECISIONS.md). These include the fresh-session handoff,
-executed verification, unresolved issues, and the untracked Git working-tree caveat.
+executed verification, unresolved issues, and the uncommitted Milestone 4 working-tree caveat.
 
 1. Inspect existing code before proposing changes.
 2. Never claim tests passed unless they were executed successfully.
@@ -47,12 +47,13 @@ executed verification, unresolved issues, and the untracked Git working-tree cav
 - Software Architect Agent produces traceable proposals using the existing strict schema provider.
   See [Milestone 3 evidence and limitations](docs/ARCHITECT_AGENT.md), including an initial unexplained
   live 502 followed by a successful 200 response. All architecture output remains proposed.
-- Latest verification: build succeeded with 0 warnings/errors; 123 tests passed, 0 failed, 0 skipped.
+- Milestone 4 sequential Analyst → Architect workflow is implemented with IDs, snapshots, explicit review status, safe partial results, and deterministic/live verification. See [Workflow](docs/WORKFLOW.md).
+- Latest verification: build succeeded with 0 warnings/errors; 155 tests passed, 0 failed, 0 skipped.
 
 ## Immediate Priority
 
 Analyst and Architect Structured Outputs each have a verified successful live sample;
-the first Architect attempt returned 502 with unresolved cause.
+the first Architect attempt returned 502 with unresolved cause. Milestone 4 had an initial unexplained 500 followed by a verified live 200. Preserve the uncommitted Milestone 4 work; no second commit or push is authorized.
 Preserve IModelProvider and the distinction between confirmed requirements, suggestions, and assumptions.
 Keep verification evidence and remaining limitations current as development continues.
 Do not refactor unrelated components.

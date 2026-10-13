@@ -1,5 +1,7 @@
 
 using System.ClientModel;
+using Factory.Api;
+using Factory.Orchestration.Workflows;
 using Factory.Core.Agents;
 using Factory.Core.Models;
 using Factory.Infrastructure.OpenAI;
@@ -72,6 +74,7 @@ builder.Services.AddSingleton<IModelProvider>(sp =>
 // Analyst Agent
 builder.Services.AddTransient<AnalystAgent>();
 builder.Services.AddTransient<ArchitectAgent>();
+builder.Services.AddTransient<AnalysisArchitectureWorkflow>();
 
 builder.Services.AddTransient<IAgent>(sp =>
     sp.GetRequiredService<AnalystAgent>());
@@ -81,6 +84,7 @@ builder.Services.AddTransient<IAgent>(sp =>
 // ======================================================
 
 var app = builder.Build();
+app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync);
 
 // ======================================================
 // 5. HEALTH ENDPOINT
