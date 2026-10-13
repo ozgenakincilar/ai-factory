@@ -1,0 +1,52 @@
+# .NET build and publish artifacts
+**/[Bb]in/
+**/[Oo]bj/
+artifacts/
+publish/
+*.nupkg
+*.snupkg
+
+# IDE and per-user state
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.sln.iml
+.vscode/
+
+# Test output and coverage
+**/TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+
+# Local credentials and private configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.publishsettings
+*.pubxml.user
+
+# Logs, temporary files, OS metadata
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

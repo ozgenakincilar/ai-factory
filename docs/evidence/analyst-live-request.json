@@ -1,0 +1,8 @@
+﻿{
+    "confirmedRequirements":  [
+
+                              ],
+    "context":  "Single-user prototype. Storage, accounts, due dates and notifications have not been decided.",
+    "task":  "Analyze a small task-list application where users can add a task with a title and mark it complete. Suggest at most two additional requirements if useful.",
+    "projectId":  "structured-output-verification"
+}
