@@ -7,7 +7,6 @@ using Factory.Core.Agents;
 using Factory.Core.Models;
 using Factory.Infrastructure.OpenAI;
 using Factory.Orchestration.Agents;
-using Microsoft.Extensions.Configuration;
 using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,16 +30,14 @@ Console.WriteLine(
 Console.WriteLine(
     $"Application: {builder.Environment.ApplicationName}");
 
-// User Secrets for local development
-if (builder.Environment.IsDevelopment())
-{
-    builder.Configuration.AddUserSecrets(
-        typeof(Program).Assembly,
-        optional: false,
-        reloadOnChange: false);
-
-    Console.WriteLine("User Secrets loading attempted.");
-}
+// CreateBuilder supplies the precedence (highest first): command line, environment,
+// Development User Secrets, environment-specific JSON, appsettings.json.
+// Never append User Secrets here: doing so would override operator configuration.
+builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(options =>
+    options.ThrowOnBadRequest = true);
+// Binding diagnostics may contain JSON paths/values or exception objects.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Http.RequestDelegateFactory", LogLevel.None);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Http.RequestDelegateGenerator", LogLevel.None);
 
 // ======================================================
 // 2. OPENAI CONFIGURATION
@@ -54,7 +51,6 @@ var model = builder.Configuration["OpenAI:Model"]
 Console.WriteLine(
     $"OpenAI API Key Available: {!string.IsNullOrWhiteSpace(apiKey)}");
 
-Console.WriteLine($"OpenAI Model: {model}");
 
 OpenAiConfiguration.ValidateApiKey(apiKey);
 
@@ -86,6 +82,8 @@ builder.Services.AddTransient<IAgent>(sp =>
 
 builder.AddFactorySecurity();
 var app = builder.Build();
+app.UseMiddleware<SafeApiExceptionMiddleware>();
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
@@ -112,16 +110,18 @@ app.MapGet("/health", () =>
 app.MapPost("/api/agents/analyst", (
     AgentRequest request,
     AnalystAgent agent,
-    CancellationToken cancellationToken) => ExecuteAgent(request, agent, cancellationToken))
+    HttpContext context,
+    CancellationToken cancellationToken) => ExecuteAgent(request, agent, context, cancellationToken))
     .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 
 app.MapPost("/api/agents/architect", (
     AgentRequest request,
     ArchitectAgent agent,
-    CancellationToken cancellationToken) => ExecuteAgent(request, agent, cancellationToken))
+    HttpContext context,
+    CancellationToken cancellationToken) => ExecuteAgent(request, agent, context, cancellationToken))
     .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 
-async Task<IResult> ExecuteAgent(AgentRequest request, IAgent agent, CancellationToken cancellationToken)
+async Task<IResult> ExecuteAgent(AgentRequest request, IAgent agent, HttpContext context, CancellationToken cancellationToken)
 {
     if (string.IsNullOrWhiteSpace(request.ProjectId) ||
         string.IsNullOrWhiteSpace(request.Task))
@@ -155,27 +155,9 @@ async Task<IResult> ExecuteAgent(AgentRequest request, IAgent agent, Cancellatio
     // OpenAI API errors
     catch (ClientResultException ex)
     {
-        var response = ex.GetRawResponse();
-        string? requestId = null;
-        response?.Headers.TryGetValue("x-request-id", out requestId);
-
-        // Only log the expected request-ID format, never arbitrary upstream text.
-        var safeRequestId = requestId is not null &&
-            System.Text.RegularExpressions.Regex.IsMatch(
-                requestId, @"\A(?:req_)?[a-fA-F0-9-]{16,64}\z")
-            ? requestId
-            : "unavailable";
-
-        app.Logger.LogError(
-            "OpenAI request failed. " +
-            "HTTP Status: {StatusCode}, " +
-            "Request ID: {RequestId}, " +
-            "Response Body Present: {HasResponseBody}, " +
-            "Exception Type: {ExceptionType}",
-            ex.Status,
-            safeRequestId,
-            response?.Content is { } body && body.ToMemory().Length > 0,
-            ex.GetType().FullName);
+        app.Logger.LogError("Agent request {TraceId}: provider_failure; HTTP {StatusCode}; " +
+            "provider HTTP {ProviderStatus}; provider request {ProviderRequestId}; exception type {ExceptionType}",
+            context.TraceIdentifier, 502, ex.Status, SafeApiDiagnostics.ProviderRequestId(ex), ex.GetType().FullName);
 
         return Results.Problem(
             title: "OpenAI API request failed",
@@ -187,15 +169,16 @@ async Task<IResult> ExecuteAgent(AgentRequest request, IAgent agent, Cancellatio
     catch (OperationCanceledException)
         when (cancellationToken.IsCancellationRequested)
     {
+        app.Logger.LogInformation("Agent request {TraceId}: request_cancelled; HTTP {StatusCode}",
+            context.TraceIdentifier, 499);
         return Results.StatusCode(499);
     }
 
     // Unexpected errors
     catch (Exception ex)
     {
-        app.Logger.LogError(
-            ex,
-            "Unexpected agent execution failure.");
+        app.Logger.LogError("Agent request {TraceId}: unexpected_agent_failure; HTTP {StatusCode}; exception type {ExceptionType}",
+            context.TraceIdentifier, 500, ex.GetType().FullName);
 
         return Results.Problem(
             title: "Agent execution failed",

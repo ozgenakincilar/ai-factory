@@ -1,7 +1,9 @@
 # Milestone 5B.1 — Authentication and project authorization
 
 Implemented on 2026-10-13. Milestone 5A is committed as
-`b3e95f479c2c38358a3c46b3776c2004e5618880`; 5B.1 is uncommitted.
+`b3e95f479c2c38358a3c46b3776c2004e5618880`. Milestone 5B.1 is committed and pushed as
+`4dbd0dec8721cea0d95047430c1ba2e927abe60b`; GitHub master was verified with
+`git ls-remote origin refs/heads/master` on 2026-10-13. The subsequent hardening changes below are uncommitted.
 No approval decision, enrollment or membership-management HTTP endpoint exists.
 No approval state/provenance transition or automatic execution was added.
 
@@ -91,8 +93,10 @@ cached public keys while Keycloak is offline; this is offline JWT validation, no
 Authentication/project denials precede workflow execution and therefore have no WorkflowId.
 Safe diagnostics use the HTTP request trace ID and static failure text. Framework authentication
 exception logging is suppressed to avoid untrusted token material; custom logs do not print claims,
-headers or exceptions. Authorization errors do not print DB exception details. Existing standalone
-agent unexpected-error logging is unchanged and still has its previously documented broader-audit limit.
+headers or exceptions. Authorization errors do not print DB exception details. The subsequent
+hardening pass replaces standalone agent raw exception logging with static failure
+codes, HTTP status, server request ID and exception type. No exception objects/messages, stack traces,
+inner exceptions, Data collections or provider bodies are logged by these handlers.
 Tokens/claims are never added to model requests, prompts or tools. Live integration tests inspect the
 fake provider's captured requests for token leakage. Deliberately putting secrets in task text is not
 prevented by authentication; callers remain responsible for submitted task contents.
@@ -138,9 +142,14 @@ and Reviewer; Service gets Generator only. It does not reactivate or overwrite e
 Do not use this sample provisioning for real people or production.
 
 `Run-FactoryApi.ps1` runs the API on 127.0.0.1:5168 with the reader connection and local issuer.
-Existing Development User Secrets still supply OpenAI configuration; the existing re-addition of
-User Secrets means those values can override environment values. Startup validation applies to the
-final configuration. Do not store conflicting Authentication/Authorization settings in User Secrets.
+Configuration uses `WebApplication.CreateBuilder` defaults, highest priority first: command-line
+arguments, environment variables, Development User Secrets, `appsettings.{Environment}.json`,
+then `appsettings.json` (with host configuration as fallback). The duplicate late User Secrets
+registration was removed. Environment settings such as `Authentication__Authority` and
+`ConnectionStrings__Authorization` now override conflicting secrets; command-line settings override
+both. Startup validation applies to the winning values and fails closed rather than falling back
+to a lower-priority valid value. Development secrets still supply settings without an override.
+Never put literal credentials in command lines or documentation.
 
 Credentials are generated, never committed or printed. Protect-FactoryDevelopmentSecrets restricts
 the two private directories to the current operator, SYSTEM and Administrators using DACL-only
@@ -156,7 +165,7 @@ ID-token signature, issuer, audience, lifetime and nonce, and confirms the API r
 Private token evidence has a five-minute access-token lifetime: rerun the browser script immediately
 before the live suite. This is an automated browser test, not an observed manual login by the developer.
 
-## Executed evidence
+## Executed Milestone 5B.1 evidence (historical)
 
 - Full build: **0 warnings, 0 errors**. Full suite: **205 passed, 0 failed, 0 skipped**.
   Includes 194 deterministic cases, nine real PostgreSQL cases and two live Keycloak cases.
@@ -201,11 +210,11 @@ local Keycloak/API logs also contained none of the checked private values. Git i
 credentials, realm import, browser evidence, binaries, data and build output. This is a scoped check,
 not a comprehensive security audit. The protected directories correctly rejected sandbox-context
 reads; the final comparison succeeded under their operator context without printing secrets.
-Git diff whitespace check passed and the index is empty. No commit or push was made.
+Git diff whitespace check passed and the index is empty. No commit or push was made during that verification; 5B.1 was subsequently committed and pushed.
 Keycloak, PostgreSQL, browser debugging/callback and the dedicated API verification listeners are
 stopped; data remains preserved. The pre-existing API on 5050 remains outside this verification.
 
-## Commit review manifest
+## Committed Milestone 5B.1 manifest
 
 Modified (11):
 
@@ -268,3 +277,47 @@ No review decisions, decision audit, idempotency or 5B.2 implementation exists. 
 - [OIDC Core](https://openid.net/specs/openid-connect-core-1_0.html)
 - [Keycloak Windows/Java setup](https://www.keycloak.org/getting-started/getting-started-zip)
 - [Keycloak administration and audience mappers](https://www.keycloak.org/docs/latest/server_admin/index.html#_audience)
+
+## Focused security hardening (2026-10-13, pending review)
+
+The API now emits `X-Request-Id` from the server request trace identifier for correlation, including
+failures before workflow execution. Workflow IDs and success payloads are preserved. Standalone SDK
+errors remain 502 with provider status and an allowlisted provider request ID; unexpected agent
+errors remain 500; observed cancellation remains 499. Authentication/project authorization semantics
+and existing 401/403/503 paths are unchanged.
+
+A request exception boundary also handles binding, dependency activation and response-writing
+failures outside agent handlers. Invalid HTTP requests keep their framework status with a static
+problem title; unexpected failures use a static 500 response. If the response already started,
+the connection is aborted without attempting a second body or rethrowing the raw exception.
+Binding exception logs are suppressed and bad-request exceptions are handled by the safe boundary,
+including in Development. This deliberately removes detailed Development error bodies.
+
+Configuration tests substitute synthetic values at the default secret-provider position and use a
+unique environment prefix; they cover all authentication settings and the authorization connection,
+command-line precedence, and invalid overrides. A separate real-entry-point test prevents late
+secret registration. Request-log tests include nested exceptions, exception Data, SDK failures,
+malformed JSON in Development and failures during dependency activation. They inspect response
+bodies, correlation, logged text and logged exception objects. Startup diagnostics are outside
+these request-log assertions; early runs encountered sandbox Data Protection startup errors.
+
+This is scoped application request-path hardening, not a global logging/telemetry redaction guarantee.
+Host startup, web server/proxy access logs, external sinks, caller-submitted secrets in task text,
+and production TLS/IdP deployment remain outside this verification. No 5B.2 work is included.
+
+Official references: [ASP.NET Core configuration precedence](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/?view=aspnetcore-10.0),
+[bad-request handling](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.routing.routehandleroptions.throwonbadrequest?view=aspnetcore-10.0).
+
+Executed hardening verification:
+
+- Targeted regressions: **15 passed, 0 failed, 0 skipped**. Initial test-harness failures were
+  resolved: configuration callbacks ran after startup validation, machine-specific startup logs
+  polluted request assertions, and the Architect fixture needed the existing string-enum serializer.
+- `node scripts/Test-KeycloakBrowser.mjs`: fresh real headless Edge PKCE login succeeded.
+- `./scripts/Test-FactorySecurity.ps1 -IncludeKeycloak`: `dotnet build` succeeded with **0 warnings,
+  0 errors**; `dotnet test --no-restore` completed with **220 passed, 0 failed, 0 skipped**, including
+  nine real PostgreSQL and two live Keycloak cases. All 205 baseline cases are retained.
+- Reviewed the tracked diff and all three new source/test files; `git diff --check` passed.
+  Six modified and three new files; index remains empty. No commit, push or 5B.2 work performed.
+- Dedicated Keycloak/PostgreSQL services stopped after verification; data preserved. No live
+  OpenAI generation was performed. Remote master readback matches `4dbd0de`.

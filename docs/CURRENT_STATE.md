@@ -6,7 +6,7 @@ Last inspected and verified: **2026-10-13**, Europe/Istanbul.
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. Preserve uncommitted Milestone 5B.1 work. No new commit,
+verification are authoritative. Milestone 5B.1 is committed and pushed; preserve the pending security hardening work. No new commit,
 push, branch rename, history rewrite, deletion, or deployment is authorized.
 
 ## Git baseline
@@ -23,11 +23,13 @@ Configuration contains no API key; launch settings use localhost, and the UserSe
 configuration metadata, not a credential. Pattern checks are not a comprehensive security audit.
 Build artifacts, IDE state, test output, logs, local secrets, and private keys are ignored.
 Milestone 4 was subsequently committed as b9ce70554d27404d0210169466875e19d5eacadb;
-the tree was clean when 5A began. Milestone 5A was committed as b3e95f479c2c38358a3c46b3776c2004e5618880. No push or history rewrite occurred.
+the tree was clean when 5A began. Milestone 5A was committed as b3e95f479c2c38358a3c46b3776c2004e5618880. At that historical checkpoint no push or history rewrite had occurred.
+Milestone 5B.1 was subsequently committed and pushed as `4dbd0dec8721cea0d95047430c1ba2e927abe60b`.
+Remote master was independently verified with `git ls-remote` on 2026-10-13.
 Git index writes required approved sandbox escalation; a per-command safe.directory exception
 was used for this workspace, without changing global Git configuration.
 
-## Milestone 5B.1 current verification and scope
+## Milestone 5B.1 baseline verification and scope
 
 See [Authentication](AUTHENTICATION.md) for implementation, setup, exact security boundaries and
 executed evidence. All three generation endpoints now require a validated API access token and
@@ -43,7 +45,8 @@ Full suite: **205 passed, 0 failed, 0 skipped**, including nine real PostgreSQL 
 cases. Human browser login used real headless Edge with PKCE/state and independently validated nonce;
 service client credentials were verified separately. No live OpenAI generation was performed.
 
-5B.1 changes are uncommitted and unstaged. Stop for review; no commit, push or 5B.2 is authorized.
+5B.1 is committed and pushed as `4dbd0de`. The focused security hardening pass is uncommitted
+and must stop for review; no new commit, push or 5B.2 is authorized.
 Local Keycloak SHA-1 matched the publisher checksum; SHA-256 is a local fingerprint, not a verified
 publisher signature. PostgreSQL's unsigned/unverified-publisher-checksum limit remains documented.
 Historical HTTP 500/502 causes remain unresolved. Test dependencies and skipped-test behavior are
@@ -102,7 +105,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 3 | Traceable proposed architecture; historical live 502 then 200, first cause unresolved, see ARCHITECT_AGENT.md |
 | 4 | Sequential workflow, per-execution IDs, explicit statuses, snapshots, cancellation and safe partial progress; see WORKFLOW.md |
 | 5A | Committed persistent review foundation; see REVIEW_FOUNDATION.md |
-| 5B.1 | Uncommitted JWT authentication and project authorization; see AUTHENTICATION.md |
+| 5B.1 | Committed/pushed JWT authentication and project authorization; see AUTHENTICATION.md |
 
 RiftMind remains an intended sample application, not a dependency or implemented product.
 No implementation/test/review agent, code execution, MCP integration, GitHub automation,
@@ -131,8 +134,9 @@ A disconnected client may not receive its cancellation body. No application-leve
 
 The API owns SDK exception classification. Workflow logs omit request/output payloads and
 exception messages/objects; safe metadata includes IDs, stages, statuses, static diagnostics,
-exception type, and allowlisted provider request IDs. Standalone unexpected-error logging
-still logs exception objects and has not undergone a broader redaction audit.
+exception type, and allowlisted provider request IDs. The pending hardening changes remove raw
+standalone exception logging and add safe request
+correlation and an exception boundary; see AUTHENTICATION.md for scope and limitations.
 
 ## Milestone 4 executed verification (historical)
 
@@ -230,7 +234,22 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- User approval is required before any further commit or push. Stop for 5B.1 review before any 5B.2 work.
+- User approval is required before any further commit or push. Stop for security hardening review before any 5B.2 work.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).
+
+## Pending security hardening
+
+5B.1 is the committed/pushed baseline; the current changes harden API diagnostics and restore
+standard configuration precedence (command line > environment > Development User Secrets > JSON).
+All authentication/project membership rules and provider contracts are retained. See
+[Authentication](AUTHENTICATION.md#focused-security-hardening-2026-10-13-pending-review) for the
+error-path behavior, targeted regression coverage and limits. No 5B.2 implementation is authorized.
+
+Executed on 2026-10-13: targeted regressions **15 passed**, full build **0 warnings/errors**,
+full suite **220 passed, 0 failed, 0 skipped**, including nine PostgreSQL and two live Keycloak
+cases with fresh browser PKCE evidence. No live OpenAI call. Diff review and whitespace check
+passed; six modified and three new files remain unstaged. The dedicated verification services
+are stopped with their data preserved. See Authentication for initial test-harness failures and
+scope limits. The 205-test numbers above describe the historical 5B.1 baseline.

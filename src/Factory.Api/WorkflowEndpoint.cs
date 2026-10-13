@@ -31,17 +31,13 @@ internal static class WorkflowEndpoint
         {
             result = ex.Result;
             statusCode = ex.InnerException is ClientResultException ? 502 : 500;
-            logger.LogWarning("Workflow {WorkflowId} failed with exception type {ExceptionType}",
-                result.WorkflowId, ex.InnerException?.GetType().FullName);
+            logger.LogWarning("Workflow {WorkflowId}, request {TraceId}: {FailureCode}; exception type {ExceptionType}",
+                result.WorkflowId, context.TraceIdentifier,
+                statusCode == 502 ? "provider_failure" : "unexpected_workflow_failure", ex.InnerException?.GetType().FullName);
             if (ex.InnerException is ClientResultException sdkError)
             {
-                string? requestId = null;
-                sdkError.GetRawResponse()?.Headers.TryGetValue("x-request-id", out requestId);
-                var safeRequestId = requestId is not null &&
-                    System.Text.RegularExpressions.Regex.IsMatch(requestId, @"\A(?:req_)?[a-fA-F0-9-]{16,64}\z")
-                    ? requestId : "unavailable";
                 logger.LogWarning("Workflow {WorkflowId} provider failure: HTTP {ProviderStatus}, request {RequestId}",
-                    result.WorkflowId, sdkError.Status, safeRequestId);
+                    result.WorkflowId, sdkError.Status, SafeApiDiagnostics.ProviderRequestId(sdkError));
             }
             // Never log exception objects, caller fields, or provider payloads.
         }

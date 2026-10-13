@@ -24,7 +24,7 @@ for required working rules.
 | Expose static validator diagnostics | Implemented | Safe rule codes improve future Architect failure diagnosis without returning request/model text. Added after an unexplained live 502; not evidence that its root cause was fixed. |
 | Keep unit/HTTP tests deterministic | Implemented | Synthetic credentials, fake model providers, SDK HTTP handlers, and WebApplicationFactory avoid paid calls during tests. Captured real responses are separate evidence fixtures; they do not prove ongoing service availability. |
 | Retain output string alongside typed fields | Implemented compatibility choice | Output now holds canonical JSON, while Analysis/Architecture offer typed consumption. This duplicates payload data; old Markdown expectations are no longer valid. |
-| Use existing Development secret configuration | Implemented | Credentials remain outside documentation; malformed key values fail early without echoing them. Development re-adds User Secrets in Program.cs; do not assume environment overrides win without inspecting configuration order. |
+| Use existing Development secret configuration | Implemented | Credentials remain outside documentation; malformed key values fail early without echoing them. The security hardening pass removes duplicate secret registration: command line overrides environment, which overrides Development User Secrets and JSON. Invalid winning security values fail closed. |
 
 ## Deferred work (not implemented or approved by this document)
 
@@ -33,7 +33,7 @@ for required working rules.
 - Sandboxed command execution, MCP tool integration, GitHub automation.
 - Additional LLM providers, persistent workflow coordination, queues, dynamic multi-agent orchestration. Review artifact storage is implemented in 5A.
 - Broader logging audit and reliability evaluation. Workflow HTTP cancellation propagation is now integration-tested.
-- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is uncommitted.
+- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is committed/pushed as 4dbd0de; the subsequent security hardening pass is uncommitted.
 
 ## Interpretation rules
 
