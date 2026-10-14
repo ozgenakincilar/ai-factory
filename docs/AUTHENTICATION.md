@@ -3,8 +3,10 @@
 Implemented on 2026-10-13. Milestone 5A is committed as
 `b3e95f479c2c38358a3c46b3776c2004e5618880`. Milestone 5B.1 is committed and pushed as
 `4dbd0dec8721cea0d95047430c1ba2e927abe60b`; GitHub master was verified with
-`git ls-remote origin refs/heads/master` on 2026-10-13. The subsequent hardening changes below are committed locally as
-`ff24cd5a13a99aa02138ac4fbd29f40baf1091ac`. Milestone 5B.2 now adds three review endpoints; see
+`git ls-remote origin refs/heads/master` on 2026-10-13. The subsequent hardening changes below are committed as
+`ff24cd5a13a99aa02138ac4fbd29f40baf1091ac`, an ancestor of the committed/pushed M5B.2 baseline
+`e1bced7230d89352ddf6e69aeae4bee71fd106bf`. Pushed status is supplied by the user's independent
+GitHub inspection. Milestone 5B.2 adds three review endpoints; see
 [Human Decisions](HUMAN_DECISIONS.md). No enrollment, membership-management endpoint or automatic execution exists.
 
 ## Authentication boundary
@@ -265,7 +267,7 @@ Short-lived bearer tokens can be replayed until expiration; Factory membership d
 on every new operation. Identity administrators can change client policy or misclassify accounts and
 remain trusted. Application/DB administrators can bypass policy and remain outside tamper resistance.
 API configuration is required at startup, but DB availability is checked per operation, not by /health.
-Milestone 5B.2 review decisions, audit and idempotency are documented separately in [Human Decisions](HUMAN_DECISIONS.md); its uncommitted implementation awaits user review.
+Milestone 5B.2 review decisions, audit and idempotency are documented separately in [Human Decisions](HUMAN_DECISIONS.md); it is committed and pushed as e1bced7. Historical pre-commit verification notes below describe their original checkpoints; future commits, pushes and milestone implementation still require explicit user authorization.
 
 ## Official references consulted
 

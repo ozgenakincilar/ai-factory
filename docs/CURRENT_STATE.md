@@ -1,19 +1,34 @@
 # Current state — fresh-session handoff
 
-Last inspected and verified: **2026-10-14**, Europe/Istanbul.
+Implementation verification date: **2026-10-14**, Europe/Istanbul.
+This documentation reconciliation preserves prior evidence; it does not independently rerun tests.
 
 ## Start here
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. Milestone 5B.1 is committed and pushed; hardening is committed locally as ff24cd5. Milestone 5B.2 is implemented in the working tree and awaits review. No staging, new commit,
-push, branch rename, history rewrite, deletion, or deployment is authorized.
+verification are authoritative. The committed/pushed implementation baseline on `master` is
+`e1bced7230d89352ddf6e69aeae4bee71fd106bf` (Milestone 5B.2), including prior hardening ff24cd5.
+Local HEAD was checked against that baseline; pushed status comes from the user's independent
+GitHub inspection, not a new remote check during this reconciliation. Future commits, pushes
+and milestone implementation require explicit user authorization.
 
 ## Milestone 5B.2 current handoff
 
-Final build: **0 warnings/errors**. Full suite: **624 passed, 0 failed, 0 skipped**, with real
+Historical full build: **0 warnings/errors**. Full suite: **624 passed, 0 failed, 0 skipped**, with real
 PostgreSQL and live Keycloak enabled. Fresh/upgrade migrations and EF drift validation passed.
-The 31-file working tree is unstaged. Verification services are stopped; data is preserved.
+The reviewed 31-file implementation was committed as e1bced7 and subsequently pushed.
+Verification services were stopped with data preserved.
+
+The later documentation-only verification reported build **0 warnings/errors** and **332 passed,
+0 failed, 36 skipped**, without configured PostgreSQL/Keycloak. This partial run does not replace
+the historical 624-test full-suite result. Neither run was independently repeated for this status
+reconciliation.
+
+**Next planned milestone: M6, Product Lifecycle & Review Integration.** Architectural approval
+must precede implementation. All M6–M16 capabilities in [Roadmap](ROADMAP.md) remain planned,
+including Terraform/Multi-Cloud/BYOC; documentation approval does not implement them. StockFlow
+is the first planned end-to-end pilot on Azure; RiftMind AI remains a separate intended product.
 
 See [Human Decisions](HUMAN_DECISIONS.md) for the approved five security requirements, endpoint
 contracts, transaction design, migration/grant setup, exact executed evidence and limitations.
@@ -62,16 +77,16 @@ Full suite: **205 passed, 0 failed, 0 skipped**, including nine real PostgreSQL 
 cases. Human browser login used real headless Edge with PKCE/state and independently validated nonce;
 service client credentials were verified separately. No live OpenAI generation was performed.
 
-5B.1 is committed and pushed as `4dbd0de`. Subsequent security hardening was committed locally
-as `ff24cd5a13a99aa02138ac4fbd29f40baf1091ac`; no push was performed for that commit.
-The current authorized 5B.2 working tree must stop for review without staging, commit or push.
+At the historical hardening checkpoint, 5B.1 was committed/pushed as `4dbd0de`, and hardening
+was committed locally as `ff24cd5a13a99aa02138ac4fbd29f40baf1091ac` without a push in that step.
+Both are now ancestors of the committed/pushed e1bced7 baseline.
 Local Keycloak SHA-1 matched the publisher checksum; SHA-256 is a local fingerprint, not a verified
 publisher signature. PostgreSQL's unsigned/unverified-publisher-checksum limit remains documented.
 Historical HTTP 500/502 causes remain unresolved. Test dependencies and skipped-test behavior are
 explicitly documented. An existing API process on 5050 was not modified or stopped.
 The dedicated Keycloak/PostgreSQL/browser/API verification listeners are stopped; data is preserved.
-The reviewed candidate manifest is 31 text files (11 modified, 20 new), recorded in AUTHENTICATION.md.
-Scoped secret/binary checks and git diff whitespace checks passed; the index is empty.
+That historical 5B.1 candidate comprised 31 text files (11 modified, 20 new), recorded in AUTHENTICATION.md.
+Scoped secret/binary checks and git diff whitespace checks passed; the index was empty at that checkpoint.
 
 ## Milestone 5A verification and scope (historical)
 
@@ -104,9 +119,9 @@ isolated database is stopped; its data is preserved under ignored artifacts for 
 
 ## Implemented architecture
 
-Closure review reran the full suite against the preserved PostgreSQL cluster: **170 passed,
+The historical 5A closure review reran the full suite against the preserved PostgreSQL cluster: **170 passed,
 0 failed, 0 skipped**, build **0 warnings/errors**. All 19 candidates were reviewed; no secrets or
-unintended binary/build/data files were found. The index remains empty. See Review Foundation's
+unintended binary/build/data files were found. The index was empty at that checkpoint. See Review Foundation's
 closure section for the unsigned binary/checksum limitation and store-versus-database invariants.
 The cluster is stopped. Milestone 5A was subsequently committed as b3e95f4.
 
@@ -124,16 +139,20 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 4 | Sequential workflow, per-execution IDs, explicit statuses, snapshots, cancellation and safe partial progress; see WORKFLOW.md |
 | 5A | Committed persistent review foundation; see REVIEW_FOUNDATION.md |
 | 5B.1 | Committed/pushed JWT authentication and project authorization; see AUTHENTICATION.md |
+| 5B.2 | Committed/pushed secure human approval transactions, e1bced7; see HUMAN_DECISIONS.md |
 
-RiftMind remains an intended sample application, not a dependency or implemented product.
-No implementation/test/review agent, code execution, MCP integration, GitHub automation,
-queue, generic workflow engine or human approval ledger was added. 5A adds an internal PostgreSQL store and system publication audit; 5B.1 adds authentication and project authorization.
+StockFlow is the first planned end-to-end pilot; RiftMind AI is a separate intended product.
+Neither is an implemented product or Factory dependency. No implementation/test/review agent,
+code execution, MCP integration, GitHub automation, queue or generic workflow engine is implemented.
+5A supplies persistent artifacts and publication audit; 5B.1 supplies authentication/project
+authorization; 5B.2 adds human decision audit and durable receipts for existing stored cases.
 
 ## API and workflow
 
 - GET /health: local application health, not provider availability.
 - POST /api/agents/analyst and /api/agents/architect: contracts retained; 5B.1 adds authentication/project authorization.
 - POST /api/workflows/analysis-architecture: WorkflowRequest to WorkflowResult; 5B.1 adds authentication/project authorization.
+- Three authenticated review routes provide case/artifact reads and human decisions on existing cases; see [Human Decisions](HUMAN_DECISIONS.md#implementation-and-endpoint-contracts).
 
 The workflow snapshots project ID, task, context, and caller evidence before its first await.
 Analyst runs first; its validated typed analysis and original evidence/context feed Architect.
@@ -252,7 +271,7 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- User approval is required before staging, commit, push or another milestone. Stop for 5B.2 review.
+- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 requires architectural approval first.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).

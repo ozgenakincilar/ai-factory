@@ -1,7 +1,9 @@
 # Architectural decisions
 
-Recorded from inspected implementation on **2026-10-13**. These describe implemented Factory
-choices and their trade-offs, not a new approval or the model-generated sample ADRs. See
+Implementation decisions were initially recorded on **2026-10-13**. Sections distinguish
+implemented Factory choices from approved future architecture; neither generated sample ADRs
+nor a future decision authorize implementation or provisioning. The deployment planning baseline
+is commit `e1bced7230d89352ddf6e69aeae4bee71fd106bf` (Milestone 5B.2). See
 [CURRENT_STATE.md](CURRENT_STATE.md) for verification and [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md)
 for required working rules.
 
@@ -26,14 +28,15 @@ for required working rules.
 | Retain output string alongside typed fields | Implemented compatibility choice | Output now holds canonical JSON, while Analysis/Architecture offer typed consumption. This duplicates payload data; old Markdown expectations are no longer valid. |
 | Use existing Development secret configuration | Implemented | Credentials remain outside documentation; malformed key values fail early without echoing them. The security hardening pass removes duplicate secret registration: command line overrides environment, which overrides Development User Secrets and JSON. Invalid winning security values fail closed. |
 
-## Deferred work (not implemented or approved by this document)
+## Deferred implementation (not authorized by this document)
 
-- Further approval-driven orchestration. Existing-case human decisions and persistent decision records are implemented in the local 5B.2 candidate; automatic execution remains deferred.
+- Further approval-driven orchestration. Existing-case human decisions and persistent decision records are implemented in committed 5B.2; automatic execution remains deferred.
 - Implementation, test, review, and pull-request agents.
 - Sandboxed command execution, MCP tool integration, GitHub automation.
 - Additional LLM providers, persistent workflow coordination, queues, dynamic multi-agent orchestration. Review artifact storage is implemented in 5A.
 - Broader logging audit and reliability evaluation. Workflow HTTP cancellation propagation is now integration-tested.
-- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is committed/pushed as 4dbd0de; security hardening is committed as ff24cd5; the 5B.2 candidate remains uncommitted.
+- Multi-Cloud Deployment & BYOC: approved future direction below; no Deployment Engine, Terraform modules or cloud hosting implementation exists at this baseline.
+- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is committed/pushed as 4dbd0de; security hardening is committed as ff24cd5; 5B.2 is committed and pushed as e1bced7 (pushed status confirmed by the user's independent GitHub inspection).
 
 ## Interpretation rules
 
@@ -142,4 +145,43 @@ See [Human Decisions](HUMAN_DECISIONS.md) for implementation details, executed e
   Fail and roll back if legacy audit rows violate the new invariant; never silently rewrite them.
 - Classify direct and EF-wrapped PostgreSQL integrity exceptions as safe 500 responses, preserving
   correlation without database payloads. No changes to locks, grants, transactions or idempotency.
-- The current 5B.2 candidate remains uncommitted and must stop for review after correction verification.
+- The corrected 5B.2 candidate was subsequently committed as e1bced7 after approval and staged-content verification, and is confirmed pushed. Its historical evidence remains in Human Decisions. M6 is next planned and requires architectural approval before implementation.
+
+## Multi-Cloud Deployment & BYOC (future architecture)
+
+Status: **approved future product and architecture direction; not implemented**.
+This records the user's deployment requirements against the 5B.2 baseline. It authorizes only
+this documentation update. Milestones 6–12 and their priorities remain unchanged.
+See [Product Vision](PRODUCT_VISION.md) and [Roadmap](ROADMAP.md).
+
+Customers must be able to deploy generated applications into Azure, AWS or Google Cloud using
+customer-owned accounts (BYOC) or Factory-managed hosting. Azure is first (M13A), then AWS
+(M13B), then Google Cloud (M13C). The first end-to-end StockFlow pilot (M14) uses Azure and
+does not require AWS/GCP completion. Desktop application generation, packaging and delivery remain separate in M16.
+
+| Decision | Rationale and boundary |
+| --- | --- |
+| Prefer Terraform for cross-cloud Infrastructure as Code | Establish one preferred provisioning technology while retaining provider-specific infrastructure behavior. This is a future choice, not an installed dependency or implemented integration. |
+| Keep the Deployment Engine independent of Terraform details | Scope abstractions to deployment intent, target, immutable plan reference, apply result and verification evidence. Terraform CLI arguments, module layout, provider configuration and state formats belong behind an implementation boundary. Exact interfaces are deferred until implementation design; no generic multi-tool framework is required now. |
+| Use provider-specific, versioned, tested modules | Pin module/provider/tool versions and test supported combinations per cloud. A common engine must not hide unsupported capabilities or assume resource equivalence. |
+| Isolate remote state by tenant and deployment target | Tenant-scoped access, locking, encryption, audit and recovery must cover state and plan artifacts. State must not be shared across tenants or exposed in prompts/logs; naming conventions alone are not an authorization boundary. |
+| Use least-privilege, short-lived identities | Scope identities to the tenant, cloud target, environment and required operation for both BYOC and Factory-managed hosting. Define delegation and revocation explicitly; do not give agents reusable cloud credentials. |
+| Approve and verify the exact immutable plan before apply | Bind plan identity to its content hash, application release, tenant/project/environment, cloud account, module versions and execution inputs. Check approval, authorization and plan validity before applying that exact plan; changed inputs, target or relevant state invalidate approval and require replanning. |
+| Run infrastructure only in isolated workers | Constrain executable tooling, identity, network access and job lifetime. The engine schedules controlled operations; agents cannot bypass it with unrestricted shell or infrastructure commands. |
+| Retain deployment evidence and release history | Record plan/approval identity, target, release, module versions, outcome and health checks, with sensitive details protected. Verification determines release health; a successful apply alone is insufficient. |
+| Document and test rollback/recovery per provider and workload | Include application rollback, infrastructure reconciliation, state recovery and data recovery limits. Destructive recovery requires explicit authorization; rollback is not assumed to be an automatic inverse of apply. |
+| Separate cloud deployment, source delivery and desktop delivery | Handing over source or a desktop package does not mean a running cloud application. M16 packaging is independent of the cloud deployment control path. |
+| Expose provider capabilities and availability limits | Do not assume identical services or promise zero-downtime deployment across providers. Document and verify supported strategies and recovery expectations for each target. |
+
+Trade-offs: shared deployment governance reduces duplicated orchestration, but each provider's
+modules, permissions, health checks and recovery paths still require independent maintenance and
+testing. BYOC retains customer resource ownership while requiring explicit delegated access;
+Factory-managed hosting adds tenant-isolation and operational responsibilities. Terraform remains
+the preferred implementation, while the engine boundary limits coupling without committing to
+additional IaC implementations.
+
+Milestone 5B.2 currently approves immutable review artifacts only. It does not implement deployment
+plans, cloud authorization, worker execution, state management or release operations. Future
+deployment approval must use its own verified plan/target binding; an existing review receipt
+must never be treated as permission to apply infrastructure. No application contract, database
+schema or runtime behavior changes as part of this decision.

@@ -4,7 +4,20 @@ Approved implementation scope on 2026-10-14: existing stored cases only, three a
 
 review endpoints, DecisionEvents and CommandReceipts, no generation submission or execution.
 
-Baseline is ff24cd5 (committed hardening). No staging, commit or push is authorized.
+## Current committed status
+
+Milestone 5B.2 is committed and pushed as `e1bced7230d89352ddf6e69aeae4bee71fd106bf`.
+Local HEAD was verified against this implementation baseline; pushed status was confirmed by
+the user's independent GitHub inspection. The original implementation baseline was ff24cd5.
+The verification sections and candidate manifests below retain their historical pre-commit
+context, including statements that no staging/commit/push occurred during those checks.
+
+Historical full verification: **624 passed, 0 failed, 0 skipped**, with PostgreSQL and live
+Keycloak; build **0 warnings/errors**. The later documentation-only run reported **332 passed,
+0 failed, 36 skipped** without configured PostgreSQL/Keycloak, and build **0 warnings/errors**.
+It is partial evidence and does not supersede the full suite. No tests were independently rerun
+for this status reconciliation. Future commits, pushes and milestone implementation require
+explicit user authorization; M6 remains planned pending architectural approval.
 
 ## Security requirements reviewed before SQL implementation
 
@@ -333,7 +346,7 @@ corrected on the existing development database with CREATE OR REPLACE; final fre
 
 executed the corrected migration from scratch. No released migration or Git history was rewritten.
 
-## Invariant-correction verification - 2026-10-14 (fresh)
+## Invariant-correction verification - 2026-10-14 (historical pre-commit run)
 
 - `./scripts/Test-FactoryDecisions.ps1 -IncludeKeycloak`: build **0 warnings, 0 errors**;
   **624 passed, 0 failed, 0 skipped**, including all existing cases, real PostgreSQL transactions
@@ -403,11 +416,13 @@ Historical response format 1 must remain stable in future serializers. Receipt r
 
 membership administration, workflow coordination and automatic execution are out of scope.
 
-Stop for user review: **no staging, commit, push or another milestone is authorized**.
+The pre-commit review gate was subsequently satisfied by explicit user approval and staged-content
+verification before commit e1bced7. Future commits, pushes and milestone implementation still
+require explicit user authorization; this evidence does not authorize M6 implementation.
 
-## Reviewed candidate manifest
+## Reviewed candidate manifest (historical pre-commit snapshot)
 
-31 text files: 13 modified and 18 new; none staged. This includes the original 26-file
+31 text files: 13 modified and 18 new; none were staged at that verification checkpoint. This includes the original 26-file
 5B.2 candidate and five additional files from the invariant correction (one modified, four new).
 
 ```text
@@ -444,9 +459,9 @@ tests/Factory.Tests/Reviews/DecisionReasonTests.cs
 tests/Factory.Tests/Reviews/PostgresReviewTests.cs
 ```
 
-## Files changed by this correction pass
+## Files changed by the invariant-correction pass (historical)
 
-Compared with the independently audited 26-file local candidate, this pass changes 15 files
+Compared with the independently audited 26-file local candidate, that pass changed 15 files
 (including four newly created files). The full 31-file commit candidate is listed above.
 
 ```text
