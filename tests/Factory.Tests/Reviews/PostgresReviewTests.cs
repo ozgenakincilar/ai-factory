@@ -140,7 +140,7 @@ public class PostgresReviewTests
             new NpgsqlParameter("id", review.Id), new NpgsqlParameter("run", Guid.NewGuid()), new NpgsqlParameter("bytes", new byte[] { 1 })));
         Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
         var missing = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(
-            "UPDATE review.\"ReviewCases\" SET \"CurrentVersion\" = 99 WHERE \"Id\" = @id", new NpgsqlParameter("id", review.Id)));
+            "UPDATE review.\"ReviewCases\" SET \"CurrentVersion\" = 2, \"Revision\" = \"Revision\" + 1 WHERE \"Id\" = @id", new NpgsqlParameter("id", review.Id)));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, missing.SqlState);
     }
 }

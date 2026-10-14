@@ -81,11 +81,13 @@ builder.Services.AddTransient<IAgent>(sp =>
 // ======================================================
 
 builder.AddFactorySecurity();
+builder.AddReviewDecisions();
 var app = builder.Build();
 app.UseMiddleware<SafeApiExceptionMiddleware>();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapReviewEndpoints();
 app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
     .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 

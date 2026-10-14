@@ -1,13 +1,30 @@
 # Current state — fresh-session handoff
 
-Last inspected and verified: **2026-10-13**, Europe/Istanbul.
+Last inspected and verified: **2026-10-14**, Europe/Istanbul.
 
 ## Start here
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. Milestone 5B.1 is committed and pushed; preserve the pending security hardening work. No new commit,
+verification are authoritative. Milestone 5B.1 is committed and pushed; hardening is committed locally as ff24cd5. Milestone 5B.2 is implemented in the working tree and awaits review. No staging, new commit,
 push, branch rename, history rewrite, deletion, or deployment is authorized.
+
+## Milestone 5B.2 current handoff
+
+Final build: **0 warnings/errors**. Full suite: **624 passed, 0 failed, 0 skipped**, with real
+PostgreSQL and live Keycloak enabled. Fresh/upgrade migrations and EF drift validation passed.
+The 31-file working tree is unstaged. Verification services are stopped; data is preserved.
+
+See [Human Decisions](HUMAN_DECISIONS.md) for the approved five security requirements, endpoint
+contracts, transaction design, migration/grant setup, exact executed evidence and limitations.
+Existing stored cases support Approve, Reject and Request Changes by authenticated Human project
+Reviewers. Durable receipts and append-only decision events bind exact immutable versions/hashes.
+PostgreSQL guards enforce transition integrity at COMMIT, while row locks order membership
+revocation against decisions. No agent contract, provenance, generation submission or execution changed.
+Two new migrations plus explicit operator grants are required; API startup never migrates or provisions.
+The reason-policy correction adds an explicit shared whitespace/UTF-16 invariant and safe wrapped
+integrity-error classification. Existing invalid historical reasons block upgrade without rewriting
+audit records. See Human Decisions for the exact migration, tests and review limitation.
 
 ## Git baseline
 
@@ -29,7 +46,7 @@ Remote master was independently verified with `git ls-remote` on 2026-10-13.
 Git index writes required approved sandbox escalation; a per-command safe.directory exception
 was used for this workspace, without changing global Git configuration.
 
-## Milestone 5B.1 baseline verification and scope
+## Milestone 5B.1 baseline verification and scope (historical)
 
 See [Authentication](AUTHENTICATION.md) for implementation, setup, exact security boundaries and
 executed evidence. All three generation endpoints now require a validated API access token and
@@ -45,8 +62,9 @@ Full suite: **205 passed, 0 failed, 0 skipped**, including nine real PostgreSQL 
 cases. Human browser login used real headless Edge with PKCE/state and independently validated nonce;
 service client credentials were verified separately. No live OpenAI generation was performed.
 
-5B.1 is committed and pushed as `4dbd0de`. The focused security hardening pass is uncommitted
-and must stop for review; no new commit, push or 5B.2 is authorized.
+5B.1 is committed and pushed as `4dbd0de`. Subsequent security hardening was committed locally
+as `ff24cd5a13a99aa02138ac4fbd29f40baf1091ac`; no push was performed for that commit.
+The current authorized 5B.2 working tree must stop for review without staging, commit or push.
 Local Keycloak SHA-1 matched the publisher checksum; SHA-256 is a local fingerprint, not a verified
 publisher signature. PostgreSQL's unsigned/unverified-publisher-checksum limit remains documented.
 Historical HTTP 500/502 causes remain unresolved. Test dependencies and skipped-test behavior are
@@ -63,7 +81,7 @@ immutable UTF-8 artifact bytes/SHA-256, version publication and optimistic concu
 PostgreSQL tables, append-only system events, and an EF migration. The API is not registered
 with this store; existing routes and workflows remain unchanged and ephemeral. No approval
 endpoint, OIDC, project membership authorization, decision writer, or command idempotency exists.
-The database CHECK allows PendingReview only. The following 5A evidence is historical; 5B.1 is authorized, but 5B.2 and decision endpoints are not.
+The database CHECK allows PendingReview only. The following 5A evidence is historical; the current 5B.2 implementation is described above.
 
 Environment inspection found no Docker/PostgreSQL installation or listener and WSL reported not
 installed. Official PostgreSQL 18.6 portable binaries were used under ignored artifacts, with a
@@ -134,7 +152,7 @@ A disconnected client may not receive its cancellation body. No application-leve
 
 The API owns SDK exception classification. Workflow logs omit request/output payloads and
 exception messages/objects; safe metadata includes IDs, stages, statuses, static diagnostics,
-exception type, and allowlisted provider request IDs. The pending hardening changes remove raw
+exception type, and allowlisted provider request IDs. The committed hardening changes remove raw
 standalone exception logging and add safe request
 correlation and an exception boundary; see AUTHENTICATION.md for scope and limitations.
 
@@ -229,27 +247,27 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
 - Schemas/validators enforce structure and provenance, not semantic truth or completeness.
 - Live confirmed-source flow and intentionally induced provider failures remain unverified;
   deterministic tests cover positive confirmation and failure paths.
-- 5A stores review cases/artifacts/publication events and 5B.1 authenticates project operations. No persistent workflow-run coordinator, resume, idempotency or human approval decision exists.
+- 5B.2 adds secure decisions and command idempotency to existing stored reviews. Persistent workflow-run coordination, resume and automatic generation submission remain absent.
 - Snapshotting isolates mutations after the initial synchronous copy, not concurrent writes
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- User approval is required before any further commit or push. Stop for security hardening review before any 5B.2 work.
+- User approval is required before staging, commit, push or another milestone. Stop for 5B.2 review.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).
 
-## Pending security hardening
+## Committed security hardening (historical)
 
-5B.1 is the committed/pushed baseline; the current changes harden API diagnostics and restore
+5B.1 is the committed/pushed baseline; commit ff24cd5 hardens API diagnostics and restores
 standard configuration precedence (command line > environment > Development User Secrets > JSON).
 All authentication/project membership rules and provider contracts are retained. See
-[Authentication](AUTHENTICATION.md#focused-security-hardening-2026-10-13-pending-review) for the
-error-path behavior, targeted regression coverage and limits. No 5B.2 implementation is authorized.
+[Authentication](AUTHENTICATION.md#focused-security-hardening-2026-10-13-committed) for the
+error-path behavior, targeted regression coverage and limits. The later 5B.2 authorization is recorded above.
 
 Executed on 2026-10-13: targeted regressions **15 passed**, full build **0 warnings/errors**,
 full suite **220 passed, 0 failed, 0 skipped**, including nine PostgreSQL and two live Keycloak
 cases with fresh browser PKCE evidence. No live OpenAI call. Diff review and whitespace check
-passed; six modified and three new files remain unstaged. The dedicated verification services
+passed; the nine-file candidate was subsequently committed as ff24cd5. The dedicated verification services
 are stopped with their data preserved. See Authentication for initial test-harness failures and
 scope limits. The 205-test numbers above describe the historical 5B.1 baseline.

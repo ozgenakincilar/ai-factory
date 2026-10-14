@@ -23,7 +23,7 @@ public sealed class ArtifactVersionRow
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-// System publication audit only. No reviewer identity or approval can be persisted in 5A.
+// System publication audit only. Human decisions are separate DecisionEventRow records.
 public sealed class PublicationEventRow
 {
     public Guid Id { get; set; }
@@ -49,7 +49,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             {
                 t.HasCheckConstraint("case_version_positive", "\"CurrentVersion\" > 0 AND \"Revision\" > 0");
                 t.HasCheckConstraint("case_project_required", "length(btrim(\"ProjectId\")) > 0");
-                t.HasCheckConstraint("case_pending_only_5a", "\"State\" = 'PendingReview'");
+                t.HasCheckConstraint("case_state", "\"State\" IN ('PendingReview','Approved','Rejected','ChangesRequested')");
             });
             b.HasKey(x => x.Id);
             b.Property(x => x.ProjectId).HasMaxLength(200).IsRequired();
@@ -69,6 +69,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
             b.Property(x => x.Content).IsRequired();
             b.HasOne<ReviewCaseRow>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
         });
+        DecisionModel.Configure(model);
         model.Entity<PublicationEventRow>(b =>
         {
             b.ToTable("PublicationEvents");
@@ -82,7 +83,7 @@ public sealed class ReviewDbContext(DbContextOptions<ReviewDbContext> options) :
 
     private void GuardImmutableRows()
     {
-        if (ChangeTracker.Entries().Any(e => (e.Entity is ArtifactVersionRow or PublicationEventRow) &&
+        if (ChangeTracker.Entries().Any(e => (e.Entity is ArtifactVersionRow or PublicationEventRow or DecisionEventRow or CommandReceiptRow) &&
             e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("immutable_review_record");
     }

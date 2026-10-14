@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Factory.Core.Models;
+using Factory.Tests.Reviews;
+using Factory.Tests.Integration;
 using Factory.Tests.Workflows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -79,6 +81,33 @@ public class LiveKeycloakTests
         Assert.Empty(factory.Provider.Requests);
     }
 
+    [LiveDecisionFact]
+    public async Task RealKeycloakHumanCanDecide_ServiceCannotReview_AndNoAgentsExecute()
+    {
+        using var evidence = JsonDocument.Parse(await File.ReadAllTextAsync(Environment.GetEnvironmentVariable("FACTORY_KEYCLOAK_HUMAN_TOKENS")!));
+        var token = evidence.RootElement.GetProperty("accessToken").GetString()!;
+        var subject = new JwtSecurityTokenHandler().ReadJwtToken(token).Subject;
+        var seed = await DecisionTestDatabase.Seed(issuer: Issuer, subject: subject);
+        using var factory = new LiveFactory(); using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var snapshot = await client.GetAsync(ReviewEndpointTests.Route(seed)); Assert.Equal(HttpStatusCode.OK, snapshot.StatusCode);
+        using var command = ReviewEndpointTests.Command(seed, etag: snapshot.Headers.ETag!.Tag);
+        var result = await client.SendAsync(command); Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        Assert.Empty(factory.Provider.Requests); await DecisionTestDatabase.AssertCounts(seed, 2, 1, 1);
+        using var settings = JsonDocument.Parse(await File.ReadAllTextAsync(Environment.GetEnvironmentVariable("FACTORY_KEYCLOAK_SETTINGS")!));
+        using var http = new HttpClient();
+        var response = await http.PostAsync(Issuer + "/protocol/openid-connect/token", new FormUrlEncodedContent(new Dictionary<string,string> {
+            ["grant_type"]="client_credentials", ["client_id"]="factory-agent", ["client_secret"]=settings.RootElement.GetProperty("ServiceSecret").GetString()! }));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var tokens = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        client.DefaultRequestHeaders.Authorization = new("Bearer", tokens.RootElement.GetProperty("access_token").GetString()!);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(ReviewEndpointTests.Route(seed))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(ReviewEndpointTests.Route(seed) + "/artifacts/1")).StatusCode);
+        using var denied = ReviewEndpointTests.Command(seed);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(denied)).StatusCode);
+        Assert.Empty(factory.Provider.Requests);
+    }
+
     private static async Task VerifyApi(string accessToken)
     {
         using var factory = new LiveFactory();
@@ -105,6 +134,7 @@ public class LiveKeycloakTests
             builder.UseSetting("Authentication:ServiceClient", "factory-agent");
             builder.UseSetting("Authentication:AllowDevelopmentLoopbackHttp", "true");
             builder.UseSetting("ConnectionStrings:Authorization", Environment.GetEnvironmentVariable("FACTORY_AUTH_READER_CONNECTION"));
+            builder.UseSetting("ConnectionStrings:Reviews", Environment.GetEnvironmentVariable("FACTORY_DECISION_TEST_CONNECTION") ?? "Host=unused;Database=unused");
             builder.UseSetting("OpenAI:ApiKey", "synthetic-test-credential");
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureServices(services =>
@@ -122,5 +152,14 @@ public class LiveKeycloakTests
             app.Use((context, continuation) => { context.Connection.RemoteIpAddress = IPAddress.Loopback; return continuation(context); });
             next(app);
         };
+    }
+}
+
+public sealed class LiveDecisionFactAttribute : FactAttribute
+{
+    public LiveDecisionFactAttribute()
+    {
+        if (new LiveKeycloakFactAttribute().Skip is not null || new DecisionPostgresFactAttribute().Skip is not null)
+            Skip = "Requires PostgreSQL decision runtime and real Keycloak browser evidence.";
     }
 }

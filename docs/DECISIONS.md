@@ -28,12 +28,12 @@ for required working rules.
 
 ## Deferred work (not implemented or approved by this document)
 
-- Human approval decision gates and persistent decision records. Authentication and project membership authorization are implemented in 5B.1.
+- Further approval-driven orchestration. Existing-case human decisions and persistent decision records are implemented in the local 5B.2 candidate; automatic execution remains deferred.
 - Implementation, test, review, and pull-request agents.
 - Sandboxed command execution, MCP tool integration, GitHub automation.
 - Additional LLM providers, persistent workflow coordination, queues, dynamic multi-agent orchestration. Review artifact storage is implemented in 5A.
 - Broader logging audit and reliability evaluation. Workflow HTTP cancellation propagation is now integration-tested.
-- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is committed/pushed as 4dbd0de; the subsequent security hardening pass is uncommitted.
+- Further commits and pushes: require explicit user approval. Milestone 4 is committed as b9ce705; Milestone 5A is committed as b3e95f4; Milestone 5B.1 is committed/pushed as 4dbd0de; security hardening is committed as ff24cd5; the 5B.2 candidate remains uncommitted.
 
 ## Interpretation rules
 
@@ -108,3 +108,38 @@ See [Review Foundation](REVIEW_FOUNDATION.md) for real database results and limi
 - Use explicit migrations and per-request membership reads. Cached JWT signing keys permit offline
   validation; no introspection or instantaneous IdP-side token revocation is claimed. Missing validation
   material and unavailable membership storage fail closed. See [Authentication](AUTHENTICATION.md).
+
+## Milestone 5B.2 decisions (2026-10-14)
+
+- User-approved scope: decide only existing stored cases. Preserve all agents and provider contracts;
+  no automatic submission, Developer Agent, execution queue or approval-triggered agent call.
+- Add DecisionEvents and CommandReceipts, keeping immutable AI provenance untouched. An event is
+  both the human decision and its append-only audit; receipts reference its versioned historical
+  projection instead of duplicating response JSON. Future response formats must preserve format 1.
+- Bind case/project/version/hash with composite FKs. Share the existing bigint Revision with
+  publication. Require exact strong If-Match and verify exact artifact bytes before deciding.
+- Lock project, principal and Reviewer membership FOR SHARE through commit. A narrowly granted,
+  NOLOGIN-owned SECURITY DEFINER helper permits locks without giving the runtime access-table
+  mutation rights. PostgreSQL does not validate JWTs; the API identity boundary remains trusted.
+- Replace PendingReview-only CHECK with legal-transition guards and deferred constraint triggers.
+  Terminal case state, event, receipt and revision must agree at COMMIT even for raw SQL. Keep all
+  audit and artifact immutable guards. No downgrade that could erase decision history is supplied.
+- Scope durable idempotency to project/principal/command-version/key. Reauthorize every replay;
+  return the original historical body with Idempotency-Replayed and no case ETag. Conflicting reuse
+  is 409; stale revisions are 412. No automatic write retry after an uncertain response.
+- Provision ownership/grants explicitly after migration, never at startup. Retain the SELECT-only
+  authorization reader and a separate decision runtime. Dedicated factory databases revoke PUBLIC
+  database CREATE/TEMP and public-schema CREATE; this provisioning is not for shared databases.
+
+See [Human Decisions](HUMAN_DECISIONS.md) for implementation details, executed evidence and limits.
+
+### Milestone 5B.2 invariant correction (2026-10-14)
+
+- Pin the same 25 whitespace code points and 4,000 UTF-16-unit reason limit in domain, command and
+  database validation. Reject NUL/malformed Unicode; preserve exact accepted text and optional
+  Approve reasons. Avoid assuming SQL POSIX whitespace equals .NET Unicode categories.
+- Add `20261014010250_AlignDecisionReasonPolicy`; preserve all previously applied migration bytes.
+  Fail and roll back if legacy audit rows violate the new invariant; never silently rewrite them.
+- Classify direct and EF-wrapped PostgreSQL integrity exceptions as safe 500 responses, preserving
+  correlation without database payloads. No changes to locks, grants, transactions or idempotency.
+- The current 5B.2 candidate remains uncommitted and must stop for review after correction verification.

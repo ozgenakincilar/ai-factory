@@ -155,6 +155,152 @@ namespace Factory.Infrastructure.Reviews.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Factory.Infrastructure.Reviews.CommandReceiptRow", b =>
+                {
+                    b.Property<string>("ProjectId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CommandVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DecisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ResponseVersion")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ProjectId", "PrincipalId", "CommandVersion", "Key");
+
+                    b.HasIndex("DecisionId")
+                        .IsUnique();
+
+                    b.HasIndex("DecisionId", "ProjectId", "PrincipalId", "CommandVersion", "Key", "Fingerprint");
+
+                    b.ToTable("CommandReceipts", "review", t =>
+                        {
+                            t.HasCheckConstraint("receipt_format", "\"CommandVersion\" = 1 AND \"ResponseVersion\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Factory.Infrastructure.Reviews.DecisionEventRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CommandVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("ExpectedRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("MembershipRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("PrincipalRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<string>("ProjectId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long>("ProjectRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<long>("ResultRevision")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ResultState")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId", "ProjectId");
+
+                    b.HasIndex("CaseId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("CaseId", "Version", "ContentHash");
+
+                    b.ToTable("DecisionEvents", "review", t =>
+                        {
+                            t.HasCheckConstraint("decision_command_version", "\"CommandVersion\" = 1");
+
+                            t.HasCheckConstraint("decision_reason_v1", "(\"Reason\" IS NULL OR\r\n  pg_catalog.length(\"Reason\") + pg_catalog.length(pg_catalog.regexp_replace(\"Reason\" COLLATE \"C\", U&'[\\0001-\\FFFF]', '', 'g')) <= 4000)\r\nAND (\"Decision\" = 'Approve' OR (\"Reason\" IS NOT NULL AND\r\n  pg_catalog.length(pg_catalog.btrim(\"Reason\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0))");
+
+                            t.HasCheckConstraint("decision_result", "(\"Decision\" = 'Approve' AND \"ResultState\" = 'Approved') OR (\"Decision\" = 'Reject' AND \"ResultState\" = 'Rejected') OR (\"Decision\" = 'RequestChanges' AND \"ResultState\" = 'ChangesRequested')");
+
+                            t.HasCheckConstraint("decision_revision", "\"ExpectedRevision\" > 0 AND \"ResultRevision\" = \"ExpectedRevision\" + 1");
+                        });
+                });
+
             modelBuilder.Entity("Factory.Infrastructure.Reviews.PublicationEventRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -212,9 +358,9 @@ namespace Factory.Infrastructure.Reviews.Migrations
 
                     b.ToTable("ReviewCases", "review", t =>
                         {
-                            t.HasCheckConstraint("case_pending_only_5a", "\"State\" = 'PendingReview'");
-
                             t.HasCheckConstraint("case_project_required", "length(btrim(\"ProjectId\")) > 0");
+
+                            t.HasCheckConstraint("case_state", "\"State\" IN ('PendingReview','Approved','Rejected','ChangesRequested')");
 
                             t.HasCheckConstraint("case_version_positive", "\"CurrentVersion\" > 0 AND \"Revision\" > 0");
                         });
@@ -241,6 +387,33 @@ namespace Factory.Infrastructure.Reviews.Migrations
                     b.HasOne("Factory.Infrastructure.Reviews.ReviewCaseRow", null)
                         .WithMany()
                         .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Factory.Infrastructure.Reviews.CommandReceiptRow", b =>
+                {
+                    b.HasOne("Factory.Infrastructure.Reviews.DecisionEventRow", null)
+                        .WithMany()
+                        .HasForeignKey("DecisionId", "ProjectId", "PrincipalId", "CommandVersion", "Key", "Fingerprint")
+                        .HasPrincipalKey("Id", "ProjectId", "PrincipalId", "CommandVersion", "Key", "Fingerprint")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Factory.Infrastructure.Reviews.DecisionEventRow", b =>
+                {
+                    b.HasOne("Factory.Infrastructure.Reviews.ReviewCaseRow", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId", "ProjectId")
+                        .HasPrincipalKey("Id", "ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Factory.Infrastructure.Reviews.ArtifactVersionRow", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId", "Version", "ContentHash")
+                        .HasPrincipalKey("CaseId", "Version", "ContentHash")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

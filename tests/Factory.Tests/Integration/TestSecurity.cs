@@ -26,6 +26,7 @@ internal static class TestSecurity
         builder.UseSetting("Authentication:HumanClient", "factory-dev-cli");
         builder.UseSetting("Authentication:ServiceClient", "factory-agent");
         builder.UseSetting("ConnectionStrings:Authorization", "Host=unused;Database=unused");
+        builder.UseSetting("ConnectionStrings:Reviews", "Host=unused;Database=unused");
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IProjectAccessStore>();

@@ -11,7 +11,7 @@ public static class ReviewStateMachine
         if (state != ReviewState.PendingReview)
             throw new InvalidOperationException("review_already_decided");
         if (!Enum.IsDefined(decision)) throw new ArgumentException("invalid_review_decision");
-        if (decision != ReviewDecision.Approve && string.IsNullOrWhiteSpace(reason))
+        if (!DecisionReasonPolicy.IsValid(decision, reason))
             throw new ArgumentException("review_reason_required");
         return decision switch
         {

@@ -2,7 +2,9 @@ $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/..")
 $db=Get-Content "$repo/artifacts/review-postgres/connection.json" -Raw | ConvertFrom-Json
 $reader=Get-Content "$repo/artifacts/review-postgres/authorization.json" -Raw | ConvertFrom-Json
+$decision=Get-Content "$repo/artifacts/review-postgres/decisions.json" -Raw | ConvertFrom-Json
 $values=@{
+    'ConnectionStrings__Reviews'="Host=127.0.0.1;Port=$($db.Port);Database=factory_review_5a;Username=factory_decision_runtime;Password=$($decision.Password)"
     'Authentication__Authority'='http://127.0.0.1:58080/realms/factory-dev'
     'Authentication__Audience'='factory-api'; 'Authentication__HumanClient'='factory-dev-cli'; 'Authentication__ServiceClient'='factory-agent'
     'Authentication__AllowDevelopmentLoopbackHttp'='true'

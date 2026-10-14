@@ -3,9 +3,9 @@
 Implemented on 2026-10-13. Milestone 5A is committed as
 `b3e95f479c2c38358a3c46b3776c2004e5618880`. Milestone 5B.1 is committed and pushed as
 `4dbd0dec8721cea0d95047430c1ba2e927abe60b`; GitHub master was verified with
-`git ls-remote origin refs/heads/master` on 2026-10-13. The subsequent hardening changes below are uncommitted.
-No approval decision, enrollment or membership-management HTTP endpoint exists.
-No approval state/provenance transition or automatic execution was added.
+`git ls-remote origin refs/heads/master` on 2026-10-13. The subsequent hardening changes below are committed locally as
+`ff24cd5a13a99aa02138ac4fbd29f40baf1091ac`. Milestone 5B.2 now adds three review endpoints; see
+[Human Decisions](HUMAN_DECISIONS.md). No enrollment, membership-management endpoint or automatic execution exists.
 
 ## Authentication boundary
 
@@ -48,7 +48,7 @@ The API constructs identity only after validated claims. Infrastructure queries 
 records. Resource authorization uses the actual deserialized request ProjectId before any agent call.
 All of project, principal and membership must be active; `(issuer, subject)` and classification must
 match exactly. No permission cache is used. Revocation applies to subsequent checks; already-running
-generation is not retroactively cancelled. No human review decision is implemented here.
+generation is not retroactively cancelled. 5B.2 decision authorization instead holds database row locks through commit; see Human Decisions.
 
 Roles are independent grants: Reader, Generator, Reviewer. Generator authorizes generation.
 Reviewer eligibility requires a Human identity and an explicit project Reviewer grant. A Service
@@ -265,7 +265,7 @@ Short-lived bearer tokens can be replayed until expiration; Factory membership d
 on every new operation. Identity administrators can change client policy or misclassify accounts and
 remain trusted. Application/DB administrators can bypass policy and remain outside tamper resistance.
 API configuration is required at startup, but DB availability is checked per operation, not by /health.
-No review decisions, decision audit, idempotency or 5B.2 implementation exists. Stop for user review.
+Milestone 5B.2 review decisions, audit and idempotency are documented separately in [Human Decisions](HUMAN_DECISIONS.md); its uncommitted implementation awaits user review.
 
 ## Official references consulted
 
@@ -278,7 +278,7 @@ No review decisions, decision audit, idempotency or 5B.2 implementation exists. 
 - [Keycloak Windows/Java setup](https://www.keycloak.org/getting-started/getting-started-zip)
 - [Keycloak administration and audience mappers](https://www.keycloak.org/docs/latest/server_admin/index.html#_audience)
 
-## Focused security hardening (2026-10-13, pending review)
+## Focused security hardening (2026-10-13, committed)
 
 The API now emits `X-Request-Id` from the server request trace identifier for correlation, including
 failures before workflow execution. Workflow IDs and success payloads are preserved. Standalone SDK
@@ -318,6 +318,18 @@ Executed hardening verification:
   0 errors**; `dotnet test --no-restore` completed with **220 passed, 0 failed, 0 skipped**, including
   nine real PostgreSQL and two live Keycloak cases. All 205 baseline cases are retained.
 - Reviewed the tracked diff and all three new source/test files; `git diff --check` passed.
-  Six modified and three new files; index remains empty. No commit, push or 5B.2 work performed.
+  Six modified and three new files were subsequently committed as ff24cd5. That hardening
+  verification preceded 5B.2 and did not include a push.
 - Dedicated Keycloak/PostgreSQL services stopped after verification; data preserved. No live
   OpenAI generation was performed. Remote master readback matches `4dbd0de`.
+
+## Milestone 5B.2 configuration and authorization extension
+
+Configure `ConnectionStrings:Reviews` with the separately provisioned decision runtime login.
+The authorization connection remains the SELECT-only reader; never reuse owner credentials in API
+configuration. Default precedence remains command line > environment > Development User Secrets >
+environment JSON > base JSON. `Run-FactoryApi.ps1` supplies both connections through environment
+configuration without printing them. Apply the migration and `decision-runtime-grants.sql` before
+starting the API. Generation still requires Generator; review reads and decisions require Human
+plus explicit active Reviewer, including on historical replay. No role-claim or client-provided
+identity can supply membership. See [Human Decisions](HUMAN_DECISIONS.md) for race semantics and tests.
