@@ -1,19 +1,40 @@
 # Current state — fresh-session handoff
 
 Implementation verification date: **2026-10-14**, Europe/Istanbul.
-This documentation reconciliation preserves prior evidence; it does not independently rerun tests.
+M6 implementation and fresh verification are recorded below; older milestone evidence remains historical.
 
 ## Start here
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. The committed/pushed implementation baseline on `master` is
-`e1bced7230d89352ddf6e69aeae4bee71fd106bf` (Milestone 5B.2), including prior hardening ff24cd5.
-Local HEAD was checked against that baseline; pushed status comes from the user's independent
-GitHub inspection, not a new remote check during this reconciliation. Future commits, pushes
-and milestone implementation require explicit user authorization.
+verification are authoritative. Local branch `master` remains at
+`ce9f8b078c8355dbf086c96fd3d0b7412b6495e4`, with an uncommitted M6 candidate.
+M5B.2 remains committed/pushed as e1bced7. No staging, commit, push or M7 work is authorized.
 
-## Milestone 5B.2 current handoff
+## Milestone 6 current handoff
+
+The approved synchronous lifecycle integration is implemented locally. Explicit authenticated
+Generator requests admit a durable command, run Analyst then Architect outside transactions,
+and atomically publish immutable artifacts with command completion. Human Reviewer authorization
+and existing decision receipts remain independent. No automatic execution or durable scheduling.
+
+Historical pre-correction verification on 2026-10-14: build **0 warnings/errors**, **669 passed, 0 failed, 0 skipped**,
+including PostgreSQL and four live Keycloak cases. Fresh and upgrade migrations and EF model-drift
+validation passed. The original verification database was left untouched; separate M6 and historical
+regression databases were used. See [Product Lifecycle](PRODUCT_LIFECYCLE.md) for exact evidence,
+roles, HTTP contracts, manifest and limitations. Review the local candidate before any commit.
+M7–M16, including Terraform/Multi-Cloud/BYOC, remain future work.
+
+The subsequent audit reproduced the managed-publication integrity gap, now corrected locally.
+Fresh correction verification: **700 passed, 0 failed, 0 skipped**, build **0 warnings/errors**,
+including four live Keycloak cases. Corrected fresh migration, upgrade preservation/compatibility
+and EF drift checks passed. Older regression cases use the separately approved M5B.2 baseline
+database; the expanded upgrade test supplies targeted M6-schema compatibility evidence, not a
+claim that all historical tests run against M6. Dedicated verification services are stopped and
+all data preserved. M6 architecture is approved; final review and commit authorization remain
+outstanding. See Product Lifecycle for exact TRX evidence and remaining limitations.
+
+## Milestone 5B.2 handoff (historical)
 
 Historical full build: **0 warnings/errors**. Full suite: **624 passed, 0 failed, 0 skipped**, with real
 PostgreSQL and live Keycloak enabled. Fresh/upgrade migrations and EF drift validation passed.
@@ -25,8 +46,8 @@ The later documentation-only verification reported build **0 warnings/errors** a
 the historical 624-test full-suite result. Neither run was independently repeated for this status
 reconciliation.
 
-**Next planned milestone: M6, Product Lifecycle & Review Integration.** Architectural approval
-must precede implementation. All M6–M16 capabilities in [Roadmap](ROADMAP.md) remain planned,
+**At the 5B.2 handoff, the next planned milestone was M6.** Architectural approval
+was required before implementation. At that checkpoint M6–M16 capabilities in [Roadmap](ROADMAP.md) were planned,
 including Terraform/Multi-Cloud/BYOC; documentation approval does not implement them. StockFlow
 is the first planned end-to-end pilot on Azure; RiftMind AI remains a separate intended product.
 
@@ -266,12 +287,12 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
 - Schemas/validators enforce structure and provenance, not semantic truth or completeness.
 - Live confirmed-source flow and intentionally induced provider failures remain unverified;
   deterministic tests cover positive confirmation and failure paths.
-- 5B.2 adds secure decisions and command idempotency to existing stored reviews. Persistent workflow-run coordination, resume and automatic generation submission remain absent.
+- M6 adds explicit synchronous generation/publication and a durable command journal. Durable scheduling, step resume and automatic generation submission remain absent.
 - Snapshotting isolates mutations after the initial synchronous copy, not concurrent writes
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 requires architectural approval first.
+- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 implementation already received architectural approval; it now awaits final correctness verification and commit review.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).

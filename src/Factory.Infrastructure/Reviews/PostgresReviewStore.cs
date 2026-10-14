@@ -7,6 +7,16 @@ namespace Factory.Infrastructure.Reviews;
 // Each operation owns its context/transaction; failed writes cannot poison a later call.
 public sealed class PostgresReviewStore(DbContextOptions<ReviewDbContext> options) : IReviewStore
 {
+    public Task<Factory.Core.Lifecycle.GenerationOutcome> PublishManagedAsync(Factory.Core.Authorization.TrustedIdentity actor,
+        Factory.Core.Lifecycle.GenerationCommand command, Factory.Core.Lifecycle.GenerationAdmission admission,
+        byte[] executionToken, WorkflowResult result, CancellationToken cancellationToken = default)
+    {
+        using var db = new ReviewDbContext(options);
+        return new Factory.Infrastructure.Lifecycle.PostgresLifecycleStore(db.Database.GetConnectionString()!)
+            .PublishAsync(actor, command, admission, executionToken, result, cancellationToken);
+    }
+
+    // Retained signature. M6's database guard forbids creating new unlinked cases.
     public Task<ReviewCaseSnapshot> CreateAsync(WorkflowRequest request, WorkflowResult result, CancellationToken cancellationToken = default)
         => WriteAsync(Guid.NewGuid(), null, request, result, cancellationToken);
 

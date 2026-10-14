@@ -68,6 +68,15 @@ builder.Services.AddSingleton<IModelProvider>(sp =>
         sp.GetRequiredService<ChatClient>(),
         model));
 
+// M6 uses a separate client: zero SDK retries and a bounded network timeout.
+// Existing ephemeral endpoints retain their provider configuration and behavior.
+builder.Services.AddKeyedSingleton<IModelProvider>("lifecycle", (sp, key) =>
+    new OpenAiModelProvider(new ChatClient(model, new ApiKeyCredential(apiKey!), new OpenAI.OpenAIClientOptions
+    {
+        RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0),
+        NetworkTimeout = TimeSpan.FromSeconds(90)
+    }), model));
+
 // Analyst Agent
 builder.Services.AddTransient<AnalystAgent>();
 builder.Services.AddTransient<ArchitectAgent>();
@@ -82,12 +91,14 @@ builder.Services.AddTransient<IAgent>(sp =>
 
 builder.AddFactorySecurity();
 builder.AddReviewDecisions();
+builder.AddLifecycle();
 var app = builder.Build();
 app.UseMiddleware<SafeApiExceptionMiddleware>();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapReviewEndpoints();
+app.MapLifecycle();
 app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
     .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 

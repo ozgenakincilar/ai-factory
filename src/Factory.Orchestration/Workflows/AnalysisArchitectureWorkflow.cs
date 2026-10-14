@@ -7,10 +7,15 @@ namespace Factory.Orchestration.Workflows;
 
 public sealed class AnalysisArchitectureWorkflow(AnalystAgent analyst, ArchitectAgent architect)
 {
-    public async Task<WorkflowResult> ExecuteAsync(WorkflowRequest? request,
+    public Task<WorkflowResult> ExecuteAsync(WorkflowRequest? request,
+        CancellationToken cancellationToken = default)
+        => ExecuteAsync(Guid.NewGuid(), request, cancellationToken);
+
+    public async Task<WorkflowResult> ExecuteAsync(Guid runId, WorkflowRequest? request,
         CancellationToken cancellationToken = default)
     {
-        var result = new WorkflowResult(Guid.NewGuid(), WorkflowStatus.Failed);
+        if (runId == Guid.Empty) throw new ArgumentException("invalid_workflow_id");
+        var result = new WorkflowResult(runId, WorkflowStatus.Failed);
         var stage = WorkflowStage.Input;
         try
         {

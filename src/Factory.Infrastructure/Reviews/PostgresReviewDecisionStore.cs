@@ -109,8 +109,10 @@ public sealed class PostgresReviewDecisionStore(DbContextOptions<ReviewDbContext
         if (review.State != ReviewState.PendingReview) throw new ReviewCommandException(ReviewError.AlreadyDecided);
         var artifact = await ReadArtifact(db, project, id, command.ArtifactVersion, ct);
         if (artifact.ContentHash != command.ArtifactSha256) throw new ReviewCommandException(ReviewError.ArtifactMismatch);
-        review.State = ReviewStateMachine.Decide(review.State, command.Decision, command.Reason);
-        review.Revision = checked(review.Revision + 1);
+        var aggregate = ReviewCase.Restore(new(review.Id, review.ProjectId, review.CurrentVersion, review.Revision, review.State), artifact.ContentHash);
+        aggregate.Decide(command.ExpectedRevision, command.ArtifactVersion, command.ArtifactSha256, command.Decision, command.Reason);
+        review.State = aggregate.State;
+        review.Revision = aggregate.Revision;
         await db.SaveChangesAsync(ct); // Same concurrency token used by PublishAsync.
         var decision = new DecisionEventRow
         {

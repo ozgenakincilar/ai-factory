@@ -24,10 +24,14 @@ public sealed class ReviewArtifact(Guid caseId, int version, byte[] content, str
 public sealed class ReviewConflictException() : Exception("review_version_conflict");
 public sealed class ReviewIntegrityException() : Exception("review_artifact_integrity_failure");
 
-// Internal application boundary, deliberately not registered in the HTTP API in 5A.
-// Authentication, decisions, membership, and command idempotency belong to 5B.
+// M6 exposes only PublishManagedAsync to its authenticated lifecycle application service.
+// Legacy signatures remain for historical cases; the migrated database denies unlinked CreateAsync.
+// Human decisions retain their separate IReviewDecisionStore boundary.
 public interface IReviewStore
 {
+    Task<Factory.Core.Lifecycle.GenerationOutcome> PublishManagedAsync(Factory.Core.Authorization.TrustedIdentity actor,
+        Factory.Core.Lifecycle.GenerationCommand command, Factory.Core.Lifecycle.GenerationAdmission admission,
+        byte[] executionToken, WorkflowResult result, CancellationToken cancellationToken = default);
     Task<ReviewCaseSnapshot> CreateAsync(WorkflowRequest request, WorkflowResult result, CancellationToken cancellationToken = default);
     Task<ReviewCaseSnapshot> PublishAsync(Guid caseId, long expectedRevision, WorkflowRequest request,
         WorkflowResult result, CancellationToken cancellationToken = default);

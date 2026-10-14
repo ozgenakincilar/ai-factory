@@ -11,6 +11,9 @@ namespace Factory.Tests.Reviews;
 
 public class DecisionMigrationTests
 {
+    // Historical 5B.2 migration matrix. M6's closed-cohort upgrade has its own tests;
+    // these fixtures intentionally exercise the schema on which legacy creation existed.
+    private const string DecisionBaseline = "20261014010250_AlignDecisionReasonPolicy";
     [DecisionPostgresTheory]
     [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
     public async Task FreshAndUpgradeMigrations_EnforceTransactionsAndPreserveArtifacts(int stage)
@@ -29,7 +32,7 @@ public class DecisionMigrationTests
         await using var db = new ReviewDbContext(options);
         var migrator = db.GetService<IMigrator>();
         if (stage > 0) await migrator.MigrateAsync(stage == 1 ? "20261013084222_ProjectAuthorization" : "20261013211346_SecureHumanApprovalTransactions");
-        else await migrator.MigrateAsync();
+        else await migrator.MigrateAsync(DecisionBaseline);
         var publisher = new PostgresReviewStore(options);
         var review = await publisher.CreateAsync(ReviewSamples.Request, ReviewSamples.Result);
         var before = (await publisher.GetArtifactAsync(review.ProjectId, review.Id, 1))!;
@@ -46,7 +49,7 @@ public class DecisionMigrationTests
                 await DecisionReasonTests.Insert(db,new(review,before,principal),ReviewDecision.Reject,"\t");
                 await historicalTransaction.CommitAsync();
             }
-            Assert.Equal("23514",(await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync())).SqlState);
+            Assert.Equal("23514",(await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync(DecisionBaseline))).SqlState);
             Assert.Equal(3,(await db.Database.GetAppliedMigrationsAsync()).Count());
             Assert.Equal("\t",await db.Database.SqlQueryRaw<string>("""SELECT "Reason" AS "Value" FROM review."DecisionEvents" """).SingleAsync());
             Assert.Equal(1,await db.Database.SqlQueryRaw<int>("""SELECT count(*)::int AS "Value" FROM pg_catalog.pg_constraint WHERE conname='decision_reason'""").SingleAsync());
@@ -62,7 +65,7 @@ public class DecisionMigrationTests
                 new(principal.Issuer,principal.Subject,PrincipalKind.Human),oldCase.ProjectId,oldCase.Id,
                 new(1,1,oldArtifact.ContentHash,ReviewDecision.Reject,"Preserved historical reason",Guid.NewGuid()));
         }
-        if (stage > 0) await migrator.MigrateAsync();
+        if (stage > 0) await migrator.MigrateAsync(DecisionBaseline);
         Assert.Equal(4, (await db.Database.GetAppliedMigrationsAsync()).Count());
         Assert.False(db.Database.HasPendingModelChanges());
         if (historical is not null)

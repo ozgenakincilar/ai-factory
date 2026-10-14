@@ -145,7 +145,7 @@ See [Human Decisions](HUMAN_DECISIONS.md) for implementation details, executed e
   Fail and roll back if legacy audit rows violate the new invariant; never silently rewrite them.
 - Classify direct and EF-wrapped PostgreSQL integrity exceptions as safe 500 responses, preserving
   correlation without database payloads. No changes to locks, grants, transactions or idempotency.
-- The corrected 5B.2 candidate was subsequently committed as e1bced7 after approval and staged-content verification, and is confirmed pushed. Its historical evidence remains in Human Decisions. M6 is next planned and requires architectural approval before implementation.
+- The corrected 5B.2 candidate was subsequently committed as e1bced7 after approval and staged-content verification, and is confirmed pushed. Its historical evidence remains in Human Decisions. M6 subsequently received explicit architectural and implementation approval; see the M6 entry below.
 
 ## Multi-Cloud Deployment & BYOC (future architecture)
 
@@ -185,3 +185,28 @@ plans, cloud authorization, worker execution, state management or release operat
 deployment approval must use its own verified plan/target binding; an existing review receipt
 must never be treated as permission to apply infrastructure. No application contract, database
 schema or runtime behavior changes as part of this decision.
+
+## Milestone 6 lifecycle integration (2026-10-14, local candidate)
+
+Explicitly approved architecture, now implemented locally and awaiting review. See
+[Product Lifecycle](PRODUCT_LIFECYCLE.md) for contracts, verification and limitations.
+
+- One managed ReviewCase per WorkItem; server-generated WorkItemId and RunId. RunId is the
+  workflow result/envelope WorkflowId. Legacy cases remain an immutable closed, unlinked cohort.
+- A minimal ReviewCase aggregate owns publication/decision rules; PostgreSQL independently
+  enforces lineage, publication audit and successful-command consistency at COMMIT.
+- Admit a scoped, canonically fingerprinted command atomically before generation. Persist only
+  the digest of independent execution ownership. Identical admission replays never start models.
+- Generate outside transactions; publish artifacts, audit, lineage and terminal command outcome
+  atomically. Reauthorize Generator membership under locks at admission and publication.
+- Retain Reviewer-only artifact/reason access and human decisions. Lifecycle reads disclose only
+  safe metadata to Generators or Human Reviewers. Strong WorkItem ETags include case revision;
+  historical command replay carries no current ETag. Existing review validators are unchanged.
+- Terminal commands are immutable; clear active ownership, retain latest-run/history, increment
+  WorkItem revision. Explicit retries can abandon expired attempts; late finalizers are fenced.
+- Bound execution to 180 seconds, four attempts and two provider calls with SDK retries disabled
+  for the lifecycle path. No exact LLM cost or exactly-once external-call guarantee is claimed.
+- Use one additive migration and explicit least-privilege provisioning. Legacy CreateAsync keeps
+  its signature but cannot create new unlinked cases after migration. Historical bytes/audits stay intact.
+- M6 is synchronous with a command journal, not M7 scheduling: no workers, queues, automatic retry,
+  step resume or approval-triggered execution. Unknown outcomes require status/replay reconciliation.

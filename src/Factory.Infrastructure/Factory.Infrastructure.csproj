@@ -19,4 +19,9 @@
     <ProjectReference Include="..\Factory.Core\Factory.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Reviews\Migrations\ProductLifecycle.sql" />
+    <InternalsVisibleTo Include="Factory.Tests" />
+  </ItemGroup>
+
 </Project>

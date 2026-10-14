@@ -17,7 +17,7 @@ Keycloak; build **0 warnings/errors**. The later documentation-only run reported
 0 failed, 36 skipped** without configured PostgreSQL/Keycloak, and build **0 warnings/errors**.
 It is partial evidence and does not supersede the full suite. No tests were independently rerun
 for this status reconciliation. Future commits, pushes and milestone implementation require
-explicit user authorization; M6 remains planned pending architectural approval.
+explicit user authorization. M6 subsequently received that approval and is now an uncommitted local candidate; see [Product Lifecycle](PRODUCT_LIFECYCLE.md). The verification below remains historical 5B.2 evidence.
 
 ## Security requirements reviewed before SQL implementation
 
