@@ -98,6 +98,18 @@ no DDL or owner-role membership. The authorization reader stays SELECT-only. The
 narrow required reads/inserts/column updates, not table/schema ownership. API-supplied JWT identity
 is a trusted boundary: PostgreSQL does not independently validate bearer tokens.
 
+Rationale for `GRANT UPDATE ("Revision")` on `access."Projects"`, `access."Principals"` and
+`access."ProjectMemberships"` (reviewed 2026-10-15): the guard-owned authorization function in
+`ProductLifecycle.sql` locks the project, principal and membership rows with `SELECT ... FOR SHARE`
+to order revocation against admission and publication; it issues no UPDATE on these tables.
+PostgreSQL requires UPDATE privilege on at least one column of each table selected with
+`FOR SHARE` (official `SELECT` documentation, "The Locking Clause"). The single-column grant is
+therefore the minimal privilege for these locks, not unused write access. Removing it would break
+lifecycle authorization. This rationale is from code and documentation review; no separate
+negative test removes the grant, and the guard role's ability to execute an actual UPDATE of
+`Revision` through these grants is not otherwise constrained beyond function ownership and the
+absence of LOGIN.
+
 Operator setup uses a dedicated Factory database, never startup provisioning:
 
 ```powershell
@@ -246,15 +258,38 @@ times and git history. No build or test was rerun for this reconciliation.
 | Partial | 21:58:07 / 21:58:49 | 74 focused passed / 354 passed, 70 of 424 discovered not executed | Focused run; unconfigured-integration run. Not full verification. |
 | Full suite, post-correction | 22:03:19–22:03:35 | 700 passed, 0 failed, 0 skipped | Follows the last source/test changes (latest `PostgresLifecycleStore.cs` at 22:01). |
 | Unit only, undocumented before now | 22:44:26 | 22 passed | `LifecycleDomainTests` and `LifecycleServiceTests` only; no PostgreSQL, Keycloak or provisioning. Its timestamp is 64 seconds before the initializer timestamp; it does not cover the final provisioning change. TRX SHA-256 `3abb1860d9cc4e6c712aba059ab2aec4e29c14283e3f0fc6871fa792e0873628`. |
-| No evidence | — | — | `scripts/Initialize-FactoryLifecycle.ps1` was last modified at 22:45:30, 42 minutes after the 700-test run and 22 seconds before commit. |
+| No evidence at commit | — | — | `scripts/Initialize-FactoryLifecycle.ps1` was last modified at 22:45:30, 42 minutes after the 700-test run and 22 seconds before commit. Closed by the 2026-10-15 run below. |
+| **Full suite with committed initializer (2026-10-15)** | 22:15:35–22:15:52 on 2026-10-15 | 700 passed, 0 failed, 0 skipped | Databases provisioned by the committed initializer; see below. |
 
-The 700-test result must not be presented as verification after the final provisioning change.
+The 700-test result of 2026-10-14 must not be presented as verification after the final provisioning change.
 No test invokes the initializer; the full run used databases provisioned by an earlier script
 version. The committed initializer has no recorded execution. The pre-change script content
 was not preserved, so the exact change cannot be reconstructed. Ordering relies on file
 modification times, which are filesystem metadata rather than proof of content change.
-Closing this gap requires a separately approved run: the initializer (normal and `-BaselineOnly`)
-against new isolated databases, followed by `Test-FactoryLifecycle.ps1 -IncludeKeycloak`.
+Closing this gap required a separately approved run, executed on 2026-10-15 (below).
+
+### Initializer verification — 2026-10-15
+
+User-approved run at commit `aa0d346`, whose `scripts/` content is unchanged since 1b93fc4 (the
+working tree was clean except this documentation). SDK 10.0.103 via `-SdkDll`.
+
+1. `Start-ReviewPostgres.ps1` and `Start-FactoryKeycloak.ps1` (loopback only).
+2. `Initialize-FactoryLifecycle.ps1 -Database factory_m6_initcheck_20261015`: exit 0; migrations,
+   all four grant scripts and lifecycle role probe completed.
+3. `Initialize-FactoryLifecycle.ps1 -Database factory_m6_initcheck_20261015_legacy -BaselineOnly`:
+   exit 0; M5B.2 baseline migrations, three grant scripts and synthetic identities.
+4. `node scripts/Test-KeycloakBrowser.mjs`: real headless Edge PKCE/state login succeeded.
+5. `Test-FactoryLifecycle.ps1 -Database factory_m6_initcheck_20261015 -LegacyDatabase
+   factory_m6_initcheck_20261015_legacy -IncludeKeycloak -SdkDll <10.0.103>`: build **0 warnings,
+   0 errors**; **700 passed, 0 failed, 0 skipped**, including all four live Keycloak cases.
+   TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-15_22_15_37.trx`.
+   SHA-256: `df323b3688ed8d291ee1ec9fc25e27916a851c27a0ac07b8e15bcb23b088e69a`.
+6. Keycloak and PostgreSQL stopped; data preserved. Migration tests created their own
+   `factory_m6_upgrade_<GUID>`/`factory_5b2_*` databases as in earlier runs.
+
+This verifies that the committed initializer provisions databases on which the full suite passes,
+including the RiftMind-fixture text changes in ff15e75. It remains local integration evidence,
+not CI, production or exhaustive security evidence. The initializer is still not invoked by any test.
 
 Reported during development but not recorded in this repository, and therefore not verified here:
 a fresh post-correction build with 0 warnings/errors, a 21-case identifier validation check, and a

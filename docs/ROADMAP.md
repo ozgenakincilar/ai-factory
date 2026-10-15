@@ -21,7 +21,7 @@ decisions do not automatically authorize infrastructure apply or trigger executi
 
 ## M6 — Product Lifecycle & Review Integration
 
-Status: implemented and committed as 1b93fc4; the committed lifecycle initializer lacks execution evidence (see [evidence levels](PRODUCT_LIFECYCLE.md#evidence-levels-after-commit)). Priority: **P0**. Original preliminary estimate: **1–2 weeks**; the corrected database/security design reassessed this to **3–5 weeks**, still a planning range, not a validated commitment.
+Status: implemented and committed as 1b93fc4; the committed lifecycle initializer was verified on 2026-10-15 with a 700-test full run (see [evidence levels](PRODUCT_LIFECYCLE.md#evidence-levels-after-commit)). Priority: **P0**. Original preliminary estimate: **1–2 weeks**; the corrected database/security design reassessed this to **3–5 weeks**, still a planning range, not a validated commitment.
 
 Goal: Connect the existing Analyst → Architect workflow to persistent human review.
 

@@ -36,8 +36,10 @@ all data preserved. The 700-test run (2026-10-14 22:03) preceded the final chang
 `scripts/Initialize-FactoryLifecycle.ps1` (file timestamp 22:45, shortly before commit). The only
 later recorded run was 22 domain/service unit tests without PostgreSQL, Keycloak or provisioning;
 its TRX timestamp (22:44:26) also precedes the initializer timestamp. The full suite was not rerun
-after the final provisioning change. No test invokes the initializer, so the committed initializer
-version is unverified. A post-correction build, a 21-case identifier validation check and an empty
+after the final provisioning change at that time. On 2026-10-15 an approved run executed the
+committed initializer (normal and `-BaselineOnly`) on new isolated databases, then the full suite:
+build **0 warnings/errors**, **700 passed, 0 failed, 0 skipped**, including four live Keycloak
+cases (commit aa0d346, SDK 10.0.103). A post-correction build, a 21-case identifier validation check and an empty
 remote commit-status query were reported during development but have no record in this repository;
 they are reported, not verified, and no remote CI pass is claimed. See
 [evidence levels](PRODUCT_LIFECYCLE.md#evidence-levels-after-commit) for details.
@@ -169,7 +171,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 5A | Committed persistent review foundation; see REVIEW_FOUNDATION.md |
 | 5B.1 | Committed/pushed JWT authentication and project authorization; see AUTHENTICATION.md |
 | 5B.2 | Committed/pushed secure human approval transactions, e1bced7; see HUMAN_DECISIONS.md |
-| 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer unverified, see PRODUCT_LIFECYCLE.md |
+| 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer verified 2026-10-15 (700 passed), see PRODUCT_LIFECYCLE.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,
@@ -301,7 +303,7 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 is committed as 1b93fc4; the committed lifecycle initializer still lacks execution evidence.
+- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 is committed as 1b93fc4; the committed lifecycle initializer was verified on 2026-10-15.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).
