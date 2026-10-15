@@ -11,11 +11,20 @@ verification are authoritative. M6 is committed on `master` as
 `1b93fc4e0f82e942d82be1ba1372d496961eb0cb`; on 2026-10-15 `git ls-remote` showed origin master
 at that commit, and the user confirmed the commit/push was authorized. M5B.2 remains
 committed/pushed as e1bced7. M7 (Durable Workflow Orchestration) was approved on 2026-10-15;
-M7.1 is committed and pushed as `bcd50fa`. M7.2 (human-decision waiting, cancellation) was
-implemented under the user's full approval; parallel steps moved to M8; M7.3 (real-time push) is
-not started. Future commits and pushes require explicit approval.
+M7.1 is committed and pushed as `bcd50fa`, M7.2 as `9cee79c`. M7.3 (real-time run change
+notifications) was implemented under the user's full approval; parallel steps moved to M8. M8 is
+the next planned milestone and is not authorized. Future commits and pushes require explicit approval.
 
-## Milestone 7.2 current handoff
+## Milestone 7.3 current handoff
+
+PostgreSQL commit-time `NOTIFY` relayed by the API to a JWT-authenticated SignalR hub
+(`/hubs/workflows`); clients watch a project and re-read state over HTTP. Executed 2026-10-15
+(SDK 10.0.103, no live LLM calls): upgrade and fresh initialization; build **0 warnings/errors**;
+full suite **754 passed, 0 failed, 0 skipped** including four live Keycloak cases. The SignalR
+test client was pinned to 10.0.13 after a high-severity advisory in 10.0.12; no vulnerable packages
+remain. See [Durable Workflows](DURABLE_WORKFLOWS.md#milestone-73--real-time-run-change-notifications).
+
+## Milestone 7.2 handoff (committed as 9cee79c)
 
 Additive migration for waiting/decisions and cancellation; decide/cancel HTTP routes; interim
 Human-Reviewer decider authority. Executed 2026-10-15 (SDK 10.0.103, no live LLM calls): upgrade
@@ -195,7 +204,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 5B.2 | Committed/pushed secure human approval transactions, e1bced7; see HUMAN_DECISIONS.md |
 | 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer verified 2026-10-15 (700 passed), see PRODUCT_LIFECYCLE.md |
 | 7.1 | Committed/pushed durable runs, separate worker, leases/checkpoints, bcd50fa (734 passed; live worker checks), see DURABLE_WORKFLOWS.md |
-| 7.2 | Human-decision waiting and cancellation (745 passed); parallel steps moved to M8, see DURABLE_WORKFLOWS.md |
+| 7.2 | Committed/pushed human-decision waiting and cancellation, 9cee79c (745 passed); parallel steps moved to M8, see DURABLE_WORKFLOWS.md |
+| 7.3 | Real-time run change notifications via PostgreSQL NOTIFY and SignalR (754 passed), see DURABLE_WORKFLOWS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

@@ -243,6 +243,18 @@ Decided under the user's full approval for M7.2; reversible on request.
 - **No production decision producer yet:** the waiting path is infrastructure for M8 customer-model
   decisions; it is tested through the worker port rather than triggered by current steps.
 
+## Milestone 7.3 real-time notifications (2026-10-15)
+
+- PostgreSQL `NOTIFY` from a run trigger is the event source: delivered only at COMMIT, no extra
+  broker, works across API instances. Payloads carry only project id, run id and status because
+  any database login can LISTEN; notifications are hints and clients re-read over HTTP.
+- SignalR hub with JWT in the `Authorization` header only. Query-string tokens for browser
+  WebSockets are deferred to M12 because tokens in URLs can be logged.
+- Watch authorization is checked at subscription time; continuous revocation enforcement for
+  hint traffic is not implemented and is a documented limit.
+- Test client pinned to `Microsoft.AspNetCore.SignalR.Client` 10.0.13 after the restore reported
+  GHSA-334f-vvp4-7g6p in 10.0.12; deployments must use a patched ASP.NET Core runtime.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

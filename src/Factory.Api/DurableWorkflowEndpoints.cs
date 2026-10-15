@@ -10,10 +10,18 @@ namespace Factory.Api;
 public static class DurableWorkflowEndpoints
 {
     public static void AddDurableWorkflows(this WebApplicationBuilder builder)
-        => builder.Services.AddSingleton<IWorkflowRunStore>(new PostgresOrchestrationStore(builder.Configuration.GetConnectionString("Lifecycle") ?? ""));
+    {
+        var connection = builder.Configuration.GetConnectionString("Lifecycle") ?? "";
+        builder.Services.AddSingleton<IWorkflowRunStore>(new PostgresOrchestrationStore(connection));
+        builder.Services.AddSignalR();
+        builder.Services.AddSingleton(new PostgresRunEventListener(connection));
+        builder.Services.AddSingleton<WorkflowEventRelay>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<WorkflowEventRelay>());
+    }
 
     public static void MapDurableWorkflows(this WebApplication app)
     {
+        app.MapHub<WorkflowHub>(WorkflowHub.Path).RequireAuthorization();
         var group = app.MapGroup("/api/projects/{projectId}/runs").RequireAuthorization();
         group.MapPost("", (string projectId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor =>

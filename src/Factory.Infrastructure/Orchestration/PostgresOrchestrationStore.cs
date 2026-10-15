@@ -40,6 +40,11 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
         return Read<RunView>("decide", actor, projectId, ct, P("run", runId), P("decision", decisionId), P("choice", choice));
     }
 
+    public Task AuthorizeWatchAsync(TrustedIdentity actor, string projectId, CancellationToken ct = default)
+        => string.IsNullOrWhiteSpace(projectId) || projectId.Length > 200
+            ? throw new OrchestrationException(OrchestrationError.Forbidden)
+            : Read<bool>("authorize_watch", actor, projectId, ct);
+
     public async Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default)
     {
         if (!DecisionCodes.IsCode(reason) || !DecisionCodes.AreValidOptions(options)) throw new OrchestrationException(OrchestrationError.InvalidCommand);

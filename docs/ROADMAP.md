@@ -41,9 +41,10 @@ version/hash. Human approval must not automatically execute any Developer Agent.
 
 ## M7 — Durable Workflow Orchestration
 
-Status: design approved 2026-10-15; **M7.1 committed (`bcd50fa`)**; **M7.2 implemented**
-(waiting for human decisions, cancellation); parallel steps moved to M8
-([decision](DECISIONS.md#milestone-72-scope-2026-10-15)); M7.3 (real-time push) not started.
+Status: design approved 2026-10-15; **M7.1 committed (`bcd50fa`)**; **M7.2 committed (`9cee79c`)**
+(waiting for human decisions, cancellation); **M7.3 implemented** (real-time run change
+notifications over SignalR); parallel steps moved to M8
+([decision](DECISIONS.md#milestone-72-scope-2026-10-15)). M7 scope is otherwise complete.
 See [Durable Workflows](DURABLE_WORKFLOWS.md). Priority: **P0**.
 Original estimate: **2–3 weeks**; the added asynchronous requirements below likely exceed it.
 

@@ -1,10 +1,10 @@
 # Milestone 7 — Durable Workflow Orchestration
 
-Status: M7.1 committed and pushed as `bcd50fa`. M7.2 (human-decision waiting and cancellation)
+Status: M7.1 committed and pushed as `bcd50fa`; M7.2 as `9cee79c`. M7.2 (human-decision waiting and cancellation)
 implemented and verified on 2026-10-15 under the user's full approval; see
 [M7.2](#milestone-72--waiting-for-human-decisions-and-cancellation). Parallel steps are deferred
 to M8 (see [Architectural Decisions](DECISIONS.md#milestone-72-scope-2026-10-15)). M7.3 (real-time
-push) is not implemented. This document describes inspected code and executed local verification,
+push) is implemented; see [M7.3](#milestone-73--real-time-run-change-notifications). This document describes inspected code and executed local verification,
 not production readiness. Sections up to "Limits" describe M7.1.
 
 ## Model (Workflow Orchestration bounded context)
@@ -180,3 +180,60 @@ HTTP strict bodies for decide/cancel.
 - Cancellation does not abort an in-flight provider call immediately; the worker stops at its next
   lease check (heartbeat 20 s) and the call may still be billed.
 - Deciders are interim Human project Reviewers until M8 introduces tenant roles.
+
+## Milestone 7.3 — Real-time run change notifications
+
+Additive migration `20261016000000_DurableWorkflowEvents` (embedded `DurableWorkflowEvents.sql`).
+
+- **Source.** An `AFTER INSERT OR UPDATE` trigger on `WorkflowRuns` calls `pg_notify` on channel
+  `orchestration_runs`. PostgreSQL delivers it only when the transaction commits, so rolled-back
+  changes never notify. Payload: exactly `projectId`, `runId`, `status`. No request content, model
+  output, decisions or identities. Any database login can LISTEN, which is why it stays minimal.
+- **Relay.** `WorkflowEventRelay` (API hosted service) LISTENs with the API runtime connection and
+  forwards each valid change to SignalR group `project:{projectId}` as `runChanged`
+  `{ runId, status }` (camelCase status). Malformed payloads are ignored. On connection failure it
+  logs the exception type only and reconnects after 5 s. Each API instance listens itself, so no
+  SignalR backplane is needed for this hint traffic.
+- **Hub.** `/hubs/workflows`, authenticated by the existing JWT policy. `WatchProject(projectId)`
+  is authorized by the new `orchestration.authorize_watch` function (same audience as reading a
+  run: active Generator or Human Reviewer, under the M6 revocation locks; runtime role only).
+  Failures return only `workflow_forbidden`/`workflow_unavailable`. `UnwatchProject` leaves.
+- **Contract.** Notifications are hints, not state: clients must re-read
+  `GET /api/projects/{projectId}/runs/{runId}` and should re-read after reconnecting.
+- **Security choices.** Access tokens are accepted only in the `Authorization` header. Query-string
+  tokens (needed by browser WebSockets) are deliberately not enabled, because URLs can be logged;
+  M12 must choose a browser-safe approach. SignalR stateful reconnect is not enabled.
+- **Dependency advisory.** The first restore of `Microsoft.AspNetCore.SignalR.Client` 10.0.12 (test
+  client) reported GHSA-334f-vvp4-7g6p / CVE-2026-70159 (SignalR stateful-reconnect DoS) in
+  `Microsoft.AspNetCore.SignalR.Common` ≤ 10.0.12. The test client is pinned to the patched 10.0.13.
+  The local machine has the ASP.NET Core 10.0.13 runtime, to which framework-dependent apps roll
+  forward. A solution-wide `dotnet list package --vulnerable --include-transitive` then reported
+  no vulnerable packages. Deployment environments must also run a patched runtime.
+
+### Executed verification — 2026-10-15
+
+SDK 10.0.103, working tree on top of `9cee79c`; no live LLM calls.
+
+1. Upgrade of `factory_m72_verify_20261015` and fresh `factory_m73_verify_20261016` (plus
+   `-BaselineOnly` legacy database) through the initializer; both at eight migrations.
+2. Orchestration tests against the fresh database: 54 passed.
+3. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **754 passed, 0 failed, 0 skipped** (745 existing + 9 new), including
+   four live Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-15_23_05_33.trx`,
+   SHA-256 `3ce211d4b7eefc9a1655a90ff28ff8b851e52f0f92c418e934f42d939dd1d671`.
+4. Keycloak and PostgreSQL stopped; data preserved.
+
+New cases cover commit-time notification with the exact three-field payload and no notification
+for a rejected admission; a SignalR client receiving its project's `queued`, `running` and
+`cancelled` changes without polling while another project's changes are not delivered; watch
+refused for a project without membership, for an unmapped token, and connection refused without
+a token; and malformed notification payloads ignored.
+
+### M7.3 limits
+
+- Tested over SignalR long polling through the test server; WebSockets and browser clients were
+  not exercised. No popup UI exists (M12).
+- Watch authorization is checked when watching starts; a membership revoked later keeps receiving
+  id/status hints until the client disconnects or unwatches. Content always requires a fresh,
+  authorized HTTP read.
+- Notifications raised while the relay is reconnecting are lost; there is no replay.

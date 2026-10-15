@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Factory.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Factory.Orchestration\Factory.Orchestration.csproj" />
     <ProjectReference Include="..\Factory.Infrastructure\Factory.Infrastructure.csproj" />
     <ProjectReference Include="..\Factory.Core\Factory.Core.csproj" />

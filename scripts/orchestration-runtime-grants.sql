@@ -34,7 +34,8 @@ REVOKE CREATE ON SCHEMA orchestration FROM factory_lifecycle_guard;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA orchestration FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION orchestration.submit(text,text,text,text,uuid,text,jsonb),
     orchestration.read_run(text,text,text,text,uuid), orchestration.cancel(text,text,text,text,uuid),
-    orchestration.decide(text,text,text,text,uuid,uuid,text) TO factory_lifecycle_runtime;
+    orchestration.decide(text,text,text,text,uuid,uuid,text), orchestration.authorize_watch(text,text,text,text)
+    TO factory_lifecycle_runtime;
 GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(uuid,bytea),
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]) TO factory_orchestration_worker;

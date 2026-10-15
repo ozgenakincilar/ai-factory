@@ -58,7 +58,12 @@ public interface IWorkflowRunStore
     Task<RunView> CancelAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
     // Human project Reviewer (interim until M8 tenant roles); "stop" cancels the run.
     Task<RunView> DecideAsync(TrustedIdentity actor, string projectId, Guid runId, Guid decisionId, string choice, CancellationToken ct = default);
+    // Same audience as GetRunAsync; throws Forbidden otherwise. Checked when a client starts watching.
+    Task AuthorizeWatchAsync(TrustedIdentity actor, string projectId, CancellationToken ct = default);
 }
+
+// A run changed and was committed. A hint only: clients re-read authoritative state.
+public sealed record RunChanged(string ProjectId, Guid RunId, RunStatus Status);
 
 // Worker-side port. leaseToken is private worker ownership; only its digest is stored.
 public interface IStepQueue
