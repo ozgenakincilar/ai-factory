@@ -11,8 +11,13 @@ $private="$repo/artifacts/review-postgres/lifecycle.json"
 if(-not(Test-Path $private)){
     [IO.File]::WriteAllText($private,(@{Password=([Guid]::NewGuid().ToString('N')+[Guid]::NewGuid().ToString('N'))}|ConvertTo-Json))
 }
+$workerPrivate="$repo/artifacts/review-postgres/orchestration.json"
+if(-not(Test-Path $workerPrivate)){
+    [IO.File]::WriteAllText($workerPrivate,(@{Password=([Guid]::NewGuid().ToString('N')+[Guid]::NewGuid().ToString('N'))}|ConvertTo-Json))
+}
 & "$PSScriptRoot/Protect-FactoryDevelopmentSecrets.ps1"
 $secret=Get-Content $private -Raw | ConvertFrom-Json
+$workerSecret=Get-Content $workerPrivate -Raw | ConvertFrom-Json
 $oldConnection=$env:FACTORY_REVIEW_CONNECTION; $oldPassword=$env:PGPASSWORD
 Push-Location $repo
 try {
@@ -33,13 +38,20 @@ try {
             & $psql -h 127.0.0.1 -p $settings.Port -U factory_owner -d $Database -v ON_ERROR_STOP=1 -f - 2>$null | Out-Null
         if($LASTEXITCODE){throw 'Lifecycle role provisioning failed; SQL detail suppressed.'}
     }
+    $exists=& $psql -h 127.0.0.1 -p $settings.Port -U factory_owner -d $Database -tAc "SELECT 1 FROM pg_roles WHERE rolname='factory_orchestration_worker'"
+    if($LASTEXITCODE){throw 'Role probe failed.'}
+    if($exists -ne '1'){
+        "CREATE ROLE factory_orchestration_worker LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '$($workerSecret.Password)';" |
+            & $psql -h 127.0.0.1 -p $settings.Port -U factory_owner -d $Database -v ON_ERROR_STOP=1 -f - 2>$null | Out-Null
+        if($LASTEXITCODE){throw 'Orchestration role provisioning failed; SQL detail suppressed.'}
+    }
     $env:FACTORY_REVIEW_CONNECTION="Host=127.0.0.1;Port=$($settings.Port);Database=$Database;Username=factory_owner;Password=$($settings.OwnerPassword)"
     $migrationArgs=@('database','update','--project','src/Factory.Infrastructure','--startup-project','src/Factory.Infrastructure','--context','ReviewDbContext')
     if($BaselineOnly){$migrationArgs=@('database','update','20261014010250_AlignDecisionReasonPolicy','--project','src/Factory.Infrastructure','--startup-project','src/Factory.Infrastructure','--context','ReviewDbContext')}
     & "$repo/artifacts/tools/dotnet-ef.exe" @migrationArgs
     if($LASTEXITCODE){throw 'Lifecycle migration failed.'}
     $grants=@('review-runtime-grants.sql','authorization-runtime-grants.sql','decision-runtime-grants.sql')
-    if(-not $BaselineOnly){$grants+='lifecycle-runtime-grants.sql'}
+    if(-not $BaselineOnly){$grants+=@('lifecycle-runtime-grants.sql','orchestration-runtime-grants.sql')}
     foreach($file in $grants){
         & $psql -h 127.0.0.1 -p $settings.Port -U factory_owner -d $Database -v ON_ERROR_STOP=1 -f "scripts/$file"
         if($LASTEXITCODE){throw 'Runtime grants failed.'}

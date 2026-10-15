@@ -61,7 +61,8 @@ public static class LifecycleEndpoints
         return Results.Json(response.Outcome, statusCode: response.Outcome.HttpStatus);
     }
 
-    private static async Task<GenerationCommand> Read(HttpContext http, string project, Guid? workItem, string? tag, Guid key)
+    // Shared with durable workflow admission: same strict body contract and limits.
+    internal static async Task<GenerationCommand> Read(HttpContext http, string project, Guid? workItem, string? tag, Guid key)
     {
         if (!http.Request.HasJsonContentType()) throw new LifecycleException(LifecycleError.InvalidCommand);
         var buffer = new byte[LifecycleLimits.RequestBytes + 1]; var length = 0;

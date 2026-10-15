@@ -211,6 +211,21 @@ Explicitly approved architecture, implemented and committed as 1b93fc4. See
 - M6 is synchronous with a command journal, not M7 scheduling: no workers, queues, automatic retry,
   step resume or approval-triggered execution. Unknown outcomes require status/replay reconciliation.
 
+## Milestone 7 durable orchestration design (2026-10-15, approved)
+
+User-approved design; M7.1 implemented as a local candidate. See [Durable Workflows](DURABLE_WORKFLOWS.md).
+
+- New Workflow Orchestration bounded context: `WorkflowRun` aggregate, steps and attempts.
+- Separate `Factory.Worker` process; the API only admits (202) and reads status.
+- M6 synchronous routes, functions and guards are unchanged; M6's 180-second command deadline
+  cannot host indefinite waits, so durable runs have their own schema. Publication creates the
+  M6 work item, published command and managed case in one transaction under the M6 guards.
+- PostgreSQL leases with `FOR UPDATE SKIP LOCKED`; checkpoints after each model step.
+- No automatic retry of model failures; lost leases may repeat an unfinished step's provider call
+  within a fixed attempt bound. Nothing is described as exactly-once.
+- Phases M7.1 (this), M7.2 (waiting, parallel steps, cancellation), M7.3 (real-time push), each
+  stopping for review.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

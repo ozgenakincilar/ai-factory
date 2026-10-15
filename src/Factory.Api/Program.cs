@@ -92,6 +92,7 @@ builder.Services.AddTransient<IAgent>(sp =>
 builder.AddFactorySecurity();
 builder.AddReviewDecisions();
 builder.AddLifecycle();
+builder.AddDurableWorkflows();
 var app = builder.Build();
 app.UseMiddleware<SafeApiExceptionMiddleware>();
 app.UseRouting();
@@ -99,6 +100,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapReviewEndpoints();
 app.MapLifecycle();
+app.MapDurableWorkflows();
 app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
     .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 

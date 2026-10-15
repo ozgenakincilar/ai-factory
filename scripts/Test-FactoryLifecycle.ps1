@@ -9,6 +9,7 @@ $db=Get-Content "$repo/artifacts/review-postgres/connection.json" -Raw | Convert
 $reader=Get-Content "$repo/artifacts/review-postgres/authorization.json" -Raw | ConvertFrom-Json
 $decision=Get-Content "$repo/artifacts/review-postgres/decisions.json" -Raw | ConvertFrom-Json
 $lifecycle=Get-Content "$repo/artifacts/review-postgres/lifecycle.json" -Raw | ConvertFrom-Json
+$worker=Get-Content "$repo/artifacts/review-postgres/orchestration.json" -Raw | ConvertFrom-Json
 $values=@{
     FACTORY_AUTH_OWNER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$LegacyDatabase;Username=factory_owner;Password=$($db.OwnerPassword)"
     FACTORY_AUTH_READER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$LegacyDatabase;Username=factory_authorization_reader;Password=$($reader.ReaderPassword)"
@@ -16,6 +17,7 @@ $values=@{
     FACTORY_DECISION_TEST_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$LegacyDatabase;Username=factory_decision_runtime;Password=$($decision.Password)"
     FACTORY_LIFECYCLE_OWNER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_owner;Password=$($db.OwnerPassword)"
     FACTORY_LIFECYCLE_TEST_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_lifecycle_runtime;Password=$($lifecycle.Password)"
+    FACTORY_ORCHESTRATION_WORKER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_orchestration_worker;Password=$($worker.Password)"
     FACTORY_KEYCLOAK_SETTINGS=$null; FACTORY_KEYCLOAK_HUMAN_TOKENS=$null
 }
 if($IncludeKeycloak){$values.FACTORY_KEYCLOAK_SETTINGS="$repo/artifacts/keycloak/development.json";$values.FACTORY_KEYCLOAK_HUMAN_TOKENS="$repo/artifacts/keycloak/human-tokens.json"}

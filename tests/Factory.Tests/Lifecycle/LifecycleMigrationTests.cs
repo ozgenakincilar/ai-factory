@@ -43,7 +43,8 @@ public class LifecycleMigrationTests
         var before = await Audit();
         await migrator.MigrateAsync();
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Equal(5,(await db.Database.GetAppliedMigrationsAsync()).Count());
+        // M6 plus the additive M7.1 DurableWorkflows migration.
+        Assert.Equal(6,(await db.Database.GetAppliedMigrationsAsync()).Count());
         Assert.Equal(before,await Audit());
         Assert.Equal(artifact.GetContent(),(await publisher.GetArtifactAsync(review.ProjectId,review.Id,1))!.GetContent());
         Assert.Equal("Legacy",await db.Database.SqlQueryRaw<string>("""SELECT "ManagementMode" AS "Value" FROM review."ReviewCases" LIMIT 1""").SingleAsync());
@@ -51,7 +52,7 @@ public class LifecycleMigrationTests
         Assert.Equal(outcome.Snapshot,(await decisions.DecideAsync(actor,review.ProjectId,review.Id,command)).Snapshot);
         await Assert.ThrowsAsync<DbUpdateException>(()=>publisher.CreateAsync(ReviewSamples.Request,ReviewSamples.Result));
         // Restricted legacy writer can still publish an existing historical case after explicit grants.
-        foreach(var file in new[]{"review-runtime-grants.sql","authorization-runtime-grants.sql","decision-runtime-grants.sql","lifecycle-runtime-grants.sql"})
+        foreach(var file in new[]{"review-runtime-grants.sql","authorization-runtime-grants.sql","decision-runtime-grants.sql","lifecycle-runtime-grants.sql","orchestration-runtime-grants.sql"})
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(Root(),"scripts",file)));
         var writer = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("FACTORY_REVIEW_TEST_CONNECTION")) { Database=name };
         var restricted = new PostgresReviewStore(LifecycleFixture.Options(writer.ConnectionString));

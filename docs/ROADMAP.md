@@ -41,7 +41,9 @@ version/hash. Human approval must not automatically execute any Developer Agent.
 
 ## M7 — Durable Workflow Orchestration
 
-Status: planned. Priority: **P0**. Estimated effort: **2–3 weeks**.
+Status: design approved 2026-10-15; **M7.1 implemented as an uncommitted local candidate**
+(see [Durable Workflows](DURABLE_WORKFLOWS.md)); M7.2 and M7.3 not started. Priority: **P0**.
+Original estimate: **2–3 weeks**; the added asynchronous requirements below likely exceed it.
 
 Goal: Make long-running workflows independent from individual HTTP requests and API process lifetimes.
 

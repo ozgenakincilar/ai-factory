@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Factory.Tests", "tests\Fact
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Factory.Infrastructure", "src\Factory.Infrastructure\Factory.Infrastructure.csproj", "{F3351DA7-4FBC-4A0F-815C-E1902D10CC71}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Factory.Worker", "src\Factory.Worker\Factory.Worker.csproj", "{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +89,18 @@ Global
 		{F3351DA7-4FBC-4A0F-815C-E1902D10CC71}.Release|x64.Build.0 = Release|Any CPU
 		{F3351DA7-4FBC-4A0F-815C-E1902D10CC71}.Release|x86.ActiveCfg = Release|Any CPU
 		{F3351DA7-4FBC-4A0F-815C-E1902D10CC71}.Release|x86.Build.0 = Release|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Debug|x64.Build.0 = Debug|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Debug|x86.Build.0 = Debug|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Release|x64.ActiveCfg = Release|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Release|x64.Build.0 = Release|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Release|x86.ActiveCfg = Release|Any CPU
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,5 +111,6 @@ Global
 		{0BCC4A12-237F-4C01-9108-FB905AA0C9CA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{E4E803EE-7E23-471E-BEEB-3A45F81B1C01} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{F3351DA7-4FBC-4A0F-815C-E1902D10CC71} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{13DA28E0-D2C0-44F8-B8C4-DC85A3BFD3B0} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
