@@ -267,6 +267,15 @@ Decided under the user's full approval for M7.2; reversible on request.
   human approval through the decision popup before any part executes.
 - Usage first: token counts come from provider responses; estimated cost uses an operator-maintained,
   versioned price table. The Factory never invents prices; unpriced usage is reported as such.
+- Providers (2026-10-15): OpenAI is the first Factory provider; **Anthropic is the second, for demo
+  use**. Anthropic integration requires a separate Anthropic API key (pay-as-you-go, Anthropic
+  Console) stored like other secrets; a consumer Claude subscription or an assistant session is
+  not an API credential and must not be used by the Factory. The Anthropic adapter is built in M8.4
+  after the OpenAI-compatible adapter and model registry. Further providers are added only when
+  needed; there is no subscription to every provider.
+- Anthropic demo budget: **USD 2**, set by the user as a spend limit in the Anthropic Console
+  (provider-side). M8.3 must also enforce a Factory-side cap of no more than this for the
+  Anthropic demo credential, so the Factory stops before the provider limit is reached.
 
 ## Domain-Driven Design (2026-10-15, user direction)
 

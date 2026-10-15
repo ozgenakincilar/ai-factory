@@ -82,8 +82,9 @@ capacity, and connected clients receive state changes without polling.
 
 ## M8 — Tenant Isolation & AI Cost Controls
 
-Status: plan approved 2026-10-15 in five phases; **M8.1 usage metering implemented as an
-uncommitted local candidate** (see [Cost Controls](COST_CONTROLS.md)); M8.2–M8.5 not started.
+Status: plan approved 2026-10-15 in five phases; **M8.1 usage metering committed as `7da963f`**
+(see [Cost Controls](COST_CONTROLS.md)); M8.2–M8.5 not started. Second Factory provider:
+Anthropic (demo), integrated in M8.4.
 Priority: **P0**. Original estimate: **2–3 weeks**; the approved scope substantially exceeds it.
 
 Goal: Establish organization/project isolation and observable, limited AI spending.

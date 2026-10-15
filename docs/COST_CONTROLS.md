@@ -1,7 +1,7 @@
 # Milestone 8 — Tenant Isolation & AI Cost Controls
 
 Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#milestone-8-plan-2026-10-15-user-approved)).
-**M8.1 usage metering implemented as an uncommitted local candidate.** M8.2 tenancy, M8.3 budgets,
+**M8.1 usage metering committed and pushed as `7da963f`.** M8.2 tenancy, M8.3 budgets,
 M8.4 customer-provided models and M8.5 decomposition/routing/parallel steps are not started.
 This document describes inspected code and executed local verification, not production readiness.
 
@@ -30,6 +30,12 @@ This document describes inspected code and executed local verification, not prod
   VALUES ('openai','<model>','<timestamptz>',<input micro-USD per 1M>,<output micro-USD per 1M>,'<verified source URL and date>');
   ```
 
+- **Price data.** `scripts/model-prices.sql` is the versioned, idempotent operator script with cited
+  sources. As of 2026-10-15 it contains `openai`/`gpt-4o-mini` at $0.15 input and $0.60 output per
+  1M tokens (official model page, verified 2026-10-15), effective from 2026-10-15 because earlier
+  price history was not verified. Applied to the local `factory_m7_verify_20261015` database; the
+  snapshot `gpt-4o-mini-2024-07-18` matches it, and a call recorded before the row existed stays
+  unpriced by design.
 - **Cost.** Each call's estimated cost is computed once, at recording, as
   `ceil(input × inputPrice + output × outputPrice) / 1,000,000` micro-USD, and stored with the price
   row's `EffectiveFrom`; later price rows never change it. Totals report `estimatedCostMicros` for
@@ -73,5 +79,8 @@ separation and append-only tables.
   agent/workflow endpoints are not; they should be retired or metered before budgets are enforced.
 - A worker crash during a call loses that call's record (the provider may still bill it); a failed
   usage write is an undercount. Budgets (M8.3) must reserve before calls rather than rely on records.
-- Real OpenAI token counts have not been observed through this path yet (no live call in M8.1).
+- One user-approved live run (2026-10-15, after commit `7da963f`) recorded a real OpenAI call:
+  `gpt-4o-mini-2024-07-18`, 464 input / 322 output tokens, 4815 ms, Completed, unpriced at the
+  time. The run itself failed `invalid_output` (model output did not pass Analyst validation) and
+  was not retried, by design. One sample shows the path works; it is not a reliability measure.
 - USD only; no tenant attribution until M8.2.
