@@ -128,6 +128,7 @@ public class LiveKeycloakTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.UseSetting(Factory.Api.LegacyGeneration.Setting, "true");
             builder.UseSetting("Authentication:Authority", Issuer);
             builder.UseSetting("Authentication:Audience", "factory-api");
             builder.UseSetting("Authentication:HumanClient", "factory-dev-cli");

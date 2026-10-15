@@ -103,7 +103,7 @@ public class DurableWorkflowUsageTests
             Assert.Equal("42501", (await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync())).SqlState);
         }
         await using var runtime = new NpgsqlConnection(LifecycleFixture.Runtime); await runtime.OpenAsync();
-        foreach (var sql in new[] { "SELECT orchestration.record_model_call(gen_random_uuid(),'\\x00'::bytea,'p','m',1,1,1,'Completed')",
+        foreach (var sql in new[] { "SELECT orchestration.record_model_call(gen_random_uuid(),'\\x00'::bytea,'p','m',1,1,1,'Completed',NULL::uuid)",
             """UPDATE orchestration."ModelCalls" SET "InputTokens"=0""" })
         {
             await using var command = new NpgsqlCommand(sql, runtime);

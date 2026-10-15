@@ -46,6 +46,7 @@ public class LifecycleKeycloakTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development"); builder.UseSetting("OpenAI:ApiKey", "synthetic-test-credential");
+            builder.UseSetting(Factory.Api.LegacyGeneration.Setting, "true");
             builder.UseSetting("Authentication:Authority", Issuer); builder.UseSetting("Authentication:Audience", "factory-api");
             builder.UseSetting("Authentication:HumanClient", "factory-dev-cli"); builder.UseSetting("Authentication:ServiceClient", "factory-agent");
             builder.UseSetting("Authentication:AllowDevelopmentLoopbackHttp", "true");

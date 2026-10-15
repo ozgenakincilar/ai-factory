@@ -19,8 +19,11 @@ internal static class TestSecurity
     internal const string Issuer = "https://issuer.factory.test/realms/tests";
     internal static readonly RsaSecurityKey Key = new(RSA.Create(2048)) { KeyId = "test-key" };
 
-    internal static void Configure(IWebHostBuilder builder, IProjectAccessStore? store = null)
+    // Existing regression suites exercise the retired synchronous routes, so they opt back in
+    // (allowed only in Development/Testing). Retirement itself is tested with the default.
+    internal static void Configure(IWebHostBuilder builder, IProjectAccessStore? store = null, bool legacyGeneration = true)
     {
+        if (legacyGeneration) builder.UseSetting(Factory.Api.LegacyGeneration.Setting, "true");
         builder.UseSetting("Authentication:Authority", Issuer);
         builder.UseSetting("Authentication:Audience", "factory-api");
         builder.UseSetting("Authentication:HumanClient", "factory-dev-cli");

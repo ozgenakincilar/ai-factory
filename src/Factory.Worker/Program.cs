@@ -25,7 +25,9 @@ builder.Services.AddSingleton<IModelProvider>(new OpenAiModelProvider(new ChatCl
         RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0),
         NetworkTimeout = TimeSpan.FromSeconds(90)
     }), model));
-builder.Services.AddSingleton<DurableWorkflowProcessor>();
+// The configured identity prices budget reservations before each call.
+builder.Services.AddSingleton(sp => new DurableWorkflowProcessor(sp.GetRequiredService<IStepQueue>(), sp.GetRequiredService<IModelProvider>(),
+    new ModelIdentity("openai", model)));
 builder.Services.AddHostedService<WorkflowWorkerService>();
 
 builder.Build().Run();

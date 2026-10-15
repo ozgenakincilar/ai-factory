@@ -37,6 +37,23 @@ public static class DurableWorkflowEndpoints
                 if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
                 return Results.Json(submission, statusCode: 202);
             }));
+        // Durable regeneration of an existing work item (replaces the retired M6 route).
+        app.MapPost("/api/projects/{projectId}/work-items/{workItemId:guid}/runs", (string projectId, Guid workItemId, HttpContext http,
+            IWorkflowRunStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                if (!http.Request.Headers.ContainsKey("If-Match")) return Error(428, "workflow_precondition_required");
+                var tag = http.Request.Headers.IfMatch.ToString();
+                if (http.Request.Headers.IfMatch.Count != 1 || !WorkItemETag.IsValid(tag, workItemId)) return Error(400, "invalid_workflow_precondition");
+                var header = http.Request.Headers["Idempotency-Key"];
+                if (header.Count != 1 || !Guid.TryParseExact(header.ToString(), "D", out var key) || key == Guid.Empty)
+                    return Error(400, "invalid_idempotency_key");
+                var command = await LifecycleEndpoints.Read(http, projectId, workItemId, tag, key);
+                var submission = await store.SubmitRegenerationAsync(actor, key, workItemId, tag, command.Request, http.RequestAborted);
+                http.Response.Headers.Location = $"/api/projects/{Uri.EscapeDataString(projectId)}/runs/{submission.RunId:D}";
+                if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
+                return Results.Json(submission, statusCode: 202);
+            })).RequireAuthorization();
         group.MapGet("/{runId:guid}", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.GetRunAsync(actor, projectId, runId, http.RequestAborted))));
         // Project usage over [from, to); defaults to the last 30 days. Generator or Human Reviewer.
@@ -55,6 +72,11 @@ public static class DurableWorkflowEndpoints
                 var end = to ?? DateTimeOffset.UtcNow; var start = from ?? end.AddDays(-30);
                 return Results.Json(await store.GetOrganizationUsageAsync(actor, organizationId, start, end, http.RequestAborted));
             })).RequireAuthorization();
+        // Current organization and project budgets; Human Owner/Admin only.
+        app.MapGet("/api/organizations/{organizationId}/budgets", (string organizationId, HttpContext http,
+            Factory.Core.Tenancy.ITenantUsageStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.GetBudgetsAsync(actor, organizationId, http.RequestAborted))))
+            .RequireAuthorization();
         group.MapPost("/{runId:guid}/cancel", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.CancelAsync(actor, projectId, runId, http.RequestAborted))));
         group.MapPost("/{runId:guid}/decisions/{decisionId:guid}", (string projectId, Guid runId, Guid decisionId, HttpContext http,
@@ -103,6 +125,7 @@ public static class DurableWorkflowEndpoints
                 OrchestrationError.Forbidden => Error(403, "workflow_forbidden"),
                 OrchestrationError.NotFound => Error(404, "workflow_not_found"),
                 OrchestrationError.Conflict => Error(409, "workflow_conflict"),
+                OrchestrationError.StaleRevision => Error(412, "workflow_revision_changed"),
                 OrchestrationError.Capacity => Error(429, "workflow_capacity"),
                 OrchestrationError.Integrity => Error(500, "workflow_integrity_failure"),
                 OrchestrationError.TransactionAborted => Error(503, "workflow_transaction_aborted"),

@@ -22,7 +22,8 @@ GRANT SELECT, INSERT ON orchestration."WorkflowRuns", orchestration."WorkflowSte
 GRANT UPDATE ("Status","FailureCode","WorkItemId","UpdatedAt","CancelledBy","CancelledAt") ON orchestration."WorkflowRuns" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Choice","DecidedBy","DecidedAt") ON orchestration."StepDecisions" TO factory_lifecycle_guard;
 GRANT SELECT, INSERT ON orchestration."ModelCalls" TO factory_lifecycle_guard;
-GRANT SELECT ON orchestration."ModelPrices" TO factory_lifecycle_guard;
+GRANT SELECT ON orchestration."ModelPrices", orchestration."Budgets" TO factory_lifecycle_guard;
+GRANT SELECT, INSERT ON orchestration."CostReservations" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Attempts","Output") ON orchestration."WorkflowSteps" TO factory_lifecycle_guard;
 GRANT UPDATE ("Outcome","FailureCode","FinishedAt","LeaseExpiresAt") ON orchestration."StepAttempts" TO factory_lifecycle_guard;
 -- The guard owns the functions so managed publication passes the M6 case-mode guard.
@@ -35,13 +36,15 @@ END $$;
 REVOKE CREATE ON SCHEMA orchestration FROM factory_lifecycle_guard;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA orchestration FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION orchestration.submit(text,text,text,text,uuid,text,jsonb),
+    orchestration.submit_regeneration(text,text,text,text,uuid,uuid,text,text,jsonb),
     orchestration.read_run(text,text,text,text,uuid), orchestration.cancel(text,text,text,text,uuid),
     orchestration.decide(text,text,text,text,uuid,uuid,text), orchestration.authorize_watch(text,text,text,text),
     orchestration.read_usage(text,text,text,text,timestamptz,timestamptz) TO factory_lifecycle_runtime;
 GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(uuid,bytea),
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]),
-    orchestration.record_model_call(uuid,bytea,text,text,integer,integer,integer,text) TO factory_orchestration_worker;
+    orchestration.record_model_call(uuid,bytea,text,text,integer,integer,integer,text,uuid),
+    orchestration.reserve_cost(uuid,bytea,text,text,integer,integer) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

@@ -93,16 +93,21 @@ builder.AddFactorySecurity();
 builder.AddReviewDecisions();
 builder.AddLifecycle();
 builder.AddDurableWorkflows();
+var legacyGeneration = LegacyGeneration.Enabled(builder.Configuration, builder.Environment);
 var app = builder.Build();
 app.UseMiddleware<SafeApiExceptionMiddleware>();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapReviewEndpoints();
-app.MapLifecycle();
+app.MapLifecycle(legacyGeneration);
 app.MapDurableWorkflows();
-app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
-    .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
+if (legacyGeneration)
+    app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
+        .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
+else
+    foreach (var retired in new[] { "/api/workflows/analysis-architecture", "/api/agents/analyst", "/api/agents/architect" })
+        app.MapPost(retired, LegacyGeneration.Retired).RequireAuthorization();
 
 // ======================================================
 // 5. HEALTH ENDPOINT
@@ -122,19 +127,23 @@ app.MapGet("/health", () =>
 // 6. ANALYST AGENT ENDPOINT
 // ======================================================
 
-app.MapPost("/api/agents/analyst", (
-    AgentRequest request,
-    AnalystAgent agent,
-    HttpContext context,
-    CancellationToken cancellationToken) => ExecuteAgent(request, agent, context, cancellationToken))
-    .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
+// Retired unless explicitly re-enabled in Development/Testing (see LegacyGeneration).
+if (legacyGeneration)
+{
+    app.MapPost("/api/agents/analyst", (
+        AgentRequest request,
+        AnalystAgent agent,
+        HttpContext context,
+        CancellationToken cancellationToken) => ExecuteAgent(request, agent, context, cancellationToken))
+        .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
 
-app.MapPost("/api/agents/architect", (
-    AgentRequest request,
-    ArchitectAgent agent,
-    HttpContext context,
-    CancellationToken cancellationToken) => ExecuteAgent(request, agent, context, cancellationToken))
-    .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
+    app.MapPost("/api/agents/architect", (
+        AgentRequest request,
+        ArchitectAgent agent,
+        HttpContext context,
+        CancellationToken cancellationToken) => ExecuteAgent(request, agent, context, cancellationToken))
+        .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();
+}
 
 async Task<IResult> ExecuteAgent(AgentRequest request, IAgent agent, HttpContext context, CancellationToken cancellationToken)
 {

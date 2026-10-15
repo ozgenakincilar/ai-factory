@@ -26,13 +26,15 @@ public sealed class OpenAiModelProvider : IModelProvider
             new UserChatMessage(request.UserPrompt)
         ];
 
-        ChatCompletionOptions? options = request.OutputSchema is { } schema
-            ? new ChatCompletionOptions
+        ChatCompletionOptions? options = null;
+        if (request.OutputSchema is { } schema)
+            options = new ChatCompletionOptions
             {
                 ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
                     schema.Name, BinaryData.FromString(schema.JsonSchema), jsonSchemaIsStrict: true)
-            }
-            : null;
+            };
+        if (request.MaxOutputTokens is { } maxOutput)
+            (options ??= new ChatCompletionOptions()).MaxOutputTokenCount = maxOutput;
 
         ChatCompletion completion =
             await _client.CompleteChatAsync(

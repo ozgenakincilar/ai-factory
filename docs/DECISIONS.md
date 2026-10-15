@@ -277,6 +277,16 @@ Decided under the user's full approval for M7.2; reversible on request.
   (provider-side). M8.3 must also enforce a Factory-side cap of no more than this for the
   Anthropic demo credential, so the Factory stops before the provider limit is reached.
 
+## Retire synchronous generation routes (2026-10-16, user decision)
+
+The ephemeral agent/workflow endpoints and the M6 synchronous lifecycle POST routes bypass usage
+metering and budgets, so they are closed by default (410 Gone, no model call). They can be
+re-enabled only in Development/Testing for regression suites; other environments refuse to start.
+Trade-off: existing security regression coverage is kept without exposing the routes in
+production. Durable runs are the only production generation path; regeneration of an existing
+work item moved to `POST /api/projects/{projectId}/work-items/{workItemId}/runs` (same strong-ETag
+precondition, next case version, stale publication instead of overwrite).
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

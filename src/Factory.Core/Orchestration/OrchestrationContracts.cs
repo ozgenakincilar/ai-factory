@@ -5,7 +5,11 @@ using Factory.Core.Workflows;
 
 namespace Factory.Core.Orchestration;
 
-public enum OrchestrationError { InvalidCommand, Forbidden, NotFound, Conflict, Capacity, LeaseLost, Integrity, OutcomeUnknown, TransactionAborted }
+public enum OrchestrationError { InvalidCommand, Forbidden, NotFound, Conflict, Capacity, LeaseLost, Integrity, OutcomeUnknown, TransactionAborted,
+    BudgetExceeded, PriceUnknown, StaleRevision }
+
+// The provider/model a worker is configured to call; required to price budget reservations.
+public sealed record ModelIdentity(string Provider, string Model);
 
 public sealed class OrchestrationException(OrchestrationError error) : Exception("orchestration_operation_failed")
 {
@@ -22,6 +26,8 @@ public static class DurableWorkflowLimits
     public const int MaxModelStepAttempts = 2;
     public const int MaxPublicationAttempts = 3;
     public const int ActiveRunsPerProject = 20;
+    // Upper bound per call (gpt-4o-mini allows 16,384); reservations price it as the worst case.
+    public const int MaxOutputTokens = 16_000;
 }
 
 public enum DecisionStatus { Pending, Decided, Cancelled }
@@ -45,7 +51,16 @@ public enum ModelCallOutcome { Completed, Refused, Incomplete, Empty, Failed, Ca
 
 // One provider call as observed by the worker. Tokens are null when the provider reported none
 // (failed or cancelled calls may still be billed); they are never reported as zero instead.
-public sealed record ModelCall(string? Provider, string? Model, int? InputTokens, int? OutputTokens, int DurationMs, ModelCallOutcome Outcome);
+public sealed record ModelCall(string? Provider, string? Model, int? InputTokens, int? OutputTokens, int DurationMs, ModelCallOutcome Outcome,
+    Guid? ReservationId = null);
+
+public enum BudgetScope { Organization, Project, Provider }
+public enum BudgetPeriod { Month, Lifetime }
+
+// Spent is conservative: settled priced calls at actual estimate, every other reserved call at its
+// reserved worst case. Remaining never goes below zero in the view.
+public sealed record BudgetStatus(BudgetScope Scope, string ScopeId, BudgetPeriod Period, DateTimeOffset? PeriodStart,
+    long LimitMicros, long SpentMicros, long RemainingMicros);
 
 // Usage totals. EstimatedCostMicros (USD millionths) sums priced calls only; UnpricedCalls had
 // tokens but no operator price; UnknownUsageCalls had no provider-reported tokens.
@@ -58,14 +73,19 @@ public sealed record RunView(Guid RunId, string ProjectId, RunStatus Status, str
 
 // One leased step. Prior checkpoints are revalidated by the store before they are returned.
 // Decisions are this step's earlier human decisions, so a resumed step can act on them.
+// NextVersion is the review artifact version publication will create (1 for a new work item).
 public sealed record ClaimedStep(Guid RunId, Guid AttemptId, int Ordinal, StepKind Kind, Guid CaseId,
     WorkflowRequest Request, IReadOnlyList<WorkflowStep> Steps, AnalysisResult? Analysis, ArchitectureProposal? Architecture,
-    IReadOnlyList<StepDecision>? Decisions = null);
+    IReadOnlyList<StepDecision>? Decisions = null, int NextVersion = 1);
 
 // API-side port: admission, cancellation, human decisions and safe status reads, authorized per project.
 public interface IWorkflowRunStore
 {
     Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, CancellationToken ct = default);
+    // Regenerates an existing work item as the next version of its review case. expectedETag is the
+    // work item's current strong ETag; a changed work item or case is StaleRevision (412).
+    Task<RunSubmission> SubmitRegenerationAsync(TrustedIdentity actor, Guid key, Guid workItemId, string expectedETag, WorkflowRequest request,
+        CancellationToken ct = default);
     Task<RunView> GetRunAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
     // Generator; idempotent for an already cancelled run, Conflict for a finished run.
     Task<RunView> CancelAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
@@ -88,6 +108,10 @@ public interface IStepQueue
     Task CompleteAnalysisAsync(Guid attemptId, byte[] leaseToken, AnalysisResult analysis, CancellationToken ct = default);
     Task CompleteArchitectureAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal architecture, CancellationToken ct = default);
     Task FailAsync(Guid attemptId, byte[] leaseToken, string failureCode, CancellationToken ct = default);
+    // Reserves the worst-case cost of one call against every applicable budget before it is made.
+    // Throws BudgetExceeded or PriceUnknown (a budget applies but the model has no price).
+    Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens,
+        CancellationToken ct = default);
     // Appends usage for one provider call of this attempt. Accepted even after the lease ended,
     // because a call that returned late was still made; the token proves the caller owned it.
     Task RecordModelCallAsync(Guid attemptId, byte[] leaseToken, ModelCall call, CancellationToken ct = default);

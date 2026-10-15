@@ -36,6 +36,16 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
             P("input", JsonSerializer.Serialize(request, Json), NpgsqlDbType.Jsonb));
     }
 
+    public Task<RunSubmission> SubmitRegenerationAsync(TrustedIdentity actor, Guid key, Guid workItemId, string expectedETag, WorkflowRequest request,
+        CancellationToken ct = default)
+    {
+        // Same canonical bounds and strong-ETag format as the retired M6 regeneration route.
+        try { GenerationFingerprint.Validate(new GenerationCommand(key, workItemId, expectedETag, DurableWorkflowLimits.WorkflowVersion, request)); }
+        catch (LifecycleException) { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
+        return Read<RunSubmission>("submit_regeneration", actor, request.ProjectId, ct, P("key", key), P("work", workItemId), P("tag", expectedETag),
+            P("version", DurableWorkflowLimits.WorkflowVersion), P("input", JsonSerializer.Serialize(request, Json), NpgsqlDbType.Jsonb));
+    }
+
     public Task<RunView> GetRunAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default)
         => Read<RunView>("read_run", actor, projectId, ct, P("run", runId));
 
@@ -58,10 +68,24 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
             P("from", from.ToUniversalTime(), NpgsqlDbType.TimestampTz), P("to", to.ToUniversalTime(), NpgsqlDbType.TimestampTz));
 
     public Task RecordModelCallAsync(Guid attemptId, byte[] leaseToken, ModelCall call, CancellationToken ct = default)
-        => Call("SELECT orchestration.record_model_call(@attempt,@token,@provider,@model,@input,@output,@duration,@outcome)::text", ct,
+        => Call("SELECT orchestration.record_model_call(@attempt,@token,@provider,@model,@input,@output,@duration,@outcome,@reservation)::text", ct,
             P("attempt", attemptId), P("token", leaseToken), P("provider", call.Provider, NpgsqlDbType.Text), P("model", call.Model, NpgsqlDbType.Text),
             P("input", call.InputTokens, NpgsqlDbType.Integer), P("output", call.OutputTokens, NpgsqlDbType.Integer),
-            P("duration", call.DurationMs), P("outcome", call.Outcome.ToString()));
+            P("duration", call.DurationMs), P("outcome", call.Outcome.ToString()), P("reservation", call.ReservationId, NpgsqlDbType.Uuid));
+
+    public async Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens,
+        CancellationToken ct = default)
+    {
+        var id = await Call("SELECT orchestration.reserve_cost(@attempt,@token,@provider,@model,@input,@output)::text", ct,
+            P("attempt", attemptId), P("token", leaseToken), P("provider", model.Provider), P("model", model.Model),
+            P("input", estimatedInputTokens), P("output", maxOutputTokens));
+        return Guid.TryParse(id, out var reservation) ? reservation : throw new OrchestrationException(OrchestrationError.Integrity);
+    }
+
+    public Task<IReadOnlyList<BudgetStatus>> GetBudgetsAsync(TrustedIdentity actor, string organizationId, CancellationToken ct = default)
+        => string.IsNullOrWhiteSpace(organizationId) || organizationId.Length > 210
+            ? throw new OrchestrationException(OrchestrationError.Forbidden)
+            : Read<IReadOnlyList<BudgetStatus>>("read_budgets", actor, organizationId, ct, "tenancy");
 
     public async Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default)
     {
@@ -91,7 +115,9 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
                 architecture = b.Deserialize<ArchitectureProposal>(ArchitectureJson.Options);
                 if (!ArchitectureValidator.IsValid(architecture, Agent(request, analysis))) throw new OrchestrationException(OrchestrationError.Integrity);
             }
-            return new ClaimedStep(raw.RunId, raw.AttemptId, raw.Ordinal, raw.Kind, raw.CaseId, request, raw.Steps, analysis, architecture, raw.Decisions);
+            if (raw.NextVersion < 1) throw new OrchestrationException(OrchestrationError.Integrity);
+            return new ClaimedStep(raw.RunId, raw.AttemptId, raw.Ordinal, raw.Kind, raw.CaseId, request, raw.Steps, analysis, architecture, raw.Decisions,
+                raw.NextVersion);
         }
         catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
     }
@@ -115,7 +141,7 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
         var result = new WorkflowResult(step.RunId, WorkflowStatus.AwaitingHumanReview, WorkflowStageStatus.Completed,
             WorkflowStageStatus.Completed, step.Analysis, step.Architecture);
         Factory.Core.Reviews.ReviewArtifact artifact;
-        try { artifact = ReviewArtifactSerializer.Create(step.CaseId, 1, step.Request, result, DateTimeOffset.UtcNow); }
+        try { artifact = ReviewArtifactSerializer.Create(step.CaseId, step.NextVersion, step.Request, result, DateTimeOffset.UtcNow); }
         catch (Exception ex) when (ex is ArgumentException or Factory.Core.Reviews.ReviewIntegrityException)
         { throw new OrchestrationException(OrchestrationError.Integrity); }
         _ = Factory.Core.Reviews.ReviewCase.Create(step.CaseId, step.Request.ProjectId, artifact.ContentHash);
@@ -180,6 +206,8 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
                     "42501" => OrchestrationError.Forbidden, "P6004" => OrchestrationError.NotFound,
                     "P6009" => OrchestrationError.Conflict, "P6029" => OrchestrationError.Capacity,
                     "P7010" => OrchestrationError.LeaseLost, "22023" => OrchestrationError.InvalidCommand,
+                    "P7020" => OrchestrationError.BudgetExceeded, "P7021" => OrchestrationError.PriceUnknown,
+                    "P6012" => OrchestrationError.StaleRevision,
                     var code when code.StartsWith("23", StringComparison.Ordinal) || code.StartsWith("22", StringComparison.Ordinal) => OrchestrationError.Integrity,
                     _ => OrchestrationError.OutcomeUnknown
                 });
@@ -200,5 +228,5 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
     }
 
     private sealed record RawClaim(Guid RunId, Guid AttemptId, int Ordinal, StepKind Kind, Guid CaseId, JsonElement Request,
-        IReadOnlyList<WorkflowStep> Steps, JsonElement? Analysis, JsonElement? Architecture, IReadOnlyList<StepDecision>? Decisions);
+        IReadOnlyList<WorkflowStep> Steps, JsonElement? Analysis, JsonElement? Architecture, IReadOnlyList<StepDecision>? Decisions, int NextVersion);
 }

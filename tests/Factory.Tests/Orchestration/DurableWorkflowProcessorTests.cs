@@ -155,14 +155,46 @@ public class DurableWorkflowProcessorTests
         Assert.NotNull(unrecorded.Analysis);
     }
 
+    [Fact]
+    public async Task EachCallIsReservedAtItsBoundedWorstCaseBeforeItIsMade()
+    {
+        var queue = new Queue { Next = Step(StepKind.Analysis) }; var provider = new Provider();
+        var model = new ModelIdentity("openai", "gpt-4o-mini");
+        Assert.Equal(StepOutcome.Completed, await new DurableWorkflowProcessor(queue, provider, model).ProcessNextAsync("w", default));
+        var reservation = Assert.Single(queue.Reservations);
+        Assert.Equal((model, DurableWorkflowLimits.MaxOutputTokens), (reservation.Model, reservation.Output));
+        Assert.True(reservation.Input > 100);
+        Assert.Equal(DurableWorkflowLimits.MaxOutputTokens, provider.MaxOutput);
+        Assert.Equal(reservation.Id, Assert.Single(queue.Calls).ReservationId);
+    }
+
+    [Theory]
+    [InlineData(OrchestrationError.BudgetExceeded, "budget_exceeded")]
+    [InlineData(OrchestrationError.PriceUnknown, "model_price_unknown")]
+    public async Task BudgetRefusalParksTheStepForADecisionWithoutCallingTheModel(OrchestrationError error, string reason)
+    {
+        var queue = new Queue { Next = Step(StepKind.Architecture), ReserveError = error }; var provider = new Provider();
+        Assert.Equal(StepOutcome.Suspended, await new DurableWorkflowProcessor(queue, provider, new ModelIdentity("openai", "m")).ProcessNextAsync("w", default));
+        Assert.Equal(0, provider.Calls); Assert.Empty(queue.Calls); Assert.Null(queue.Failure);
+        Assert.Equal(reason, queue.Decision!.Value.Reason);
+        Assert.Equal(["continue", "stop"], queue.Decision.Value.Options);
+    }
+
+    [Fact]
+    public void InputEstimateIsConservativeForNonAsciiText()
+    {
+        var request = new ModelRequest(new string('ş', 1000), new string('ğ', 3000), new ModelOutputSchema("s", new string('x', 1000)));
+        Assert.Equal(2600, DurableWorkflowProcessor.EstimateInputTokens(request));
+    }
+
     private sealed class Provider : IModelProvider
     {
-        internal int Calls; internal string? Content; internal bool Throw; internal Action? OnCall; internal Task? Wait;
+        internal int Calls; internal string? Content; internal bool Throw; internal Action? OnCall; internal Task? Wait; internal int? MaxOutput;
         internal ModelUsage? Usage; internal ModelResponseStatus Status = ModelResponseStatus.Completed;
         internal List<string> Schemas { get; } = [];
         public async Task<ModelResponse> GenerateAsync(ModelRequest request, CancellationToken ct = default)
         {
-            Calls++; Schemas.Add(request.OutputSchema!.Name); OnCall?.Invoke();
+            Calls++; Schemas.Add(request.OutputSchema!.Name); OnCall?.Invoke(); MaxOutput = request.MaxOutputTokens;
             if (Wait is not null) await Wait.WaitAsync(ct);
             ct.ThrowIfCancellationRequested();
             if (Throw) throw new InvalidOperationException("synthetic provider failure");
@@ -201,8 +233,15 @@ public class DurableWorkflowProcessorTests
             if (RecordFails) throw new OrchestrationException(OrchestrationError.OutcomeUnknown);
             Calls.Add(call); return Task.CompletedTask;
         }
+        internal OrchestrationError? ReserveError; internal List<(ModelIdentity Model, int Input, int Output, Guid Id)> Reservations { get; } = [];
+        internal (string Reason, IReadOnlyList<string> Options)? Decision;
+        public Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens, CancellationToken ct = default)
+        {
+            if (ReserveError is { } error) throw new OrchestrationException(error);
+            var id = Guid.NewGuid(); Reservations.Add((model, estimatedInputTokens, maxOutputTokens, id)); return Task.FromResult(id);
+        }
         public Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default)
-            => throw new NotSupportedException("No M7.2 step requests decisions; M8 model routing will.");
+        { Decision = (reason, options); return Task.FromResult(Guid.NewGuid()); }
         public Task<RunPublication> PublishAsync(ClaimedStep step, byte[] leaseToken, CancellationToken ct = default)
             => PublishError is { } error ? throw new OrchestrationException(error)
                 : Task.FromResult(new RunPublication(Guid.NewGuid(), step.CaseId, 1, new string('a', 64)));

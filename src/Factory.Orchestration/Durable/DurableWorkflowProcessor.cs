@@ -6,14 +6,18 @@ using Factory.Orchestration.Agents;
 
 namespace Factory.Orchestration.Durable;
 
-public enum StepOutcome { Idle, Completed, Failed, Released }
+public enum StepOutcome { Idle, Completed, Failed, Released, Suspended }
 
 // Application service: leases one step, executes it outside database transactions and records
 // its checkpoint. Business transitions belong to WorkflowRun and the database guards.
 // No automatic retry of model failures; a lost lease lets another worker repeat only the
 // unfinished step, which can repeat its provider call (not exactly-once).
-public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider provider)
+// With a model identity, every call is reserved against budgets before it is made; an exceeded
+// budget or an unpriced model under a budget parks the step for a human decision.
+public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider provider, ModelIdentity? model = null)
 {
+    internal static readonly string[] BudgetOptions = ["continue", "stop"];
+
     internal TimeSpan Heartbeat { get; init; } = TimeSpan.FromSeconds(DurableWorkflowLimits.HeartbeatSeconds);
     internal TimeSpan StepTimeout { get; init; } = TimeSpan.FromSeconds(DurableWorkflowLimits.StepSeconds);
 
@@ -39,8 +43,10 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
 
     private async Task<StepOutcome> ExecuteAsync(ClaimedStep step, byte[] token, CancellationTokenSource execution, CancellationToken stopping)
     {
-        // Every provider call of this attempt is metered, whatever its outcome.
-        var metered = new MeteredProvider(provider, call => Record(step.AttemptId, token, call));
+        // Every provider call of this attempt is reserved (when a model identity is configured)
+        // and metered, whatever its outcome.
+        var metered = new MeteredProvider(provider, call => Record(step.AttemptId, token, call),
+            model is null ? null : (input, output) => queue.ReserveCostAsync(step.AttemptId, token, model, input, output, CancellationToken.None));
         try
         {
             var request = new AgentRequest(step.Request.ProjectId, step.Request.Task, step.Request.Context,
@@ -61,8 +67,18 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
                     return StepOutcome.Completed;
                 default:
                     try { await queue.PublishAsync(step, token, CancellationToken.None); return StepOutcome.Completed; }
-                    catch (OrchestrationException ex) when (ex.Error is OrchestrationError.Forbidden or OrchestrationError.Integrity)
-                    { return await Fail(ex.Error == OrchestrationError.Forbidden ? "publication_forbidden" : "publication_integrity"); }
+                    catch (OrchestrationException ex) when (ex.Error is OrchestrationError.Forbidden or OrchestrationError.Integrity
+                        or OrchestrationError.StaleRevision)
+                    {
+                        // Stale: the work item or case changed after submission (e.g. a human decision);
+                        // never overwrite it with an older baseline.
+                        return await Fail(ex.Error switch
+                        {
+                            OrchestrationError.Forbidden => "publication_forbidden",
+                            OrchestrationError.StaleRevision => "publication_stale",
+                            _ => "publication_integrity"
+                        });
+                    }
             }
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
@@ -73,6 +89,19 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
         catch (OperationCanceledException) when (execution.IsCancellationRequested)
         {
             return await Fail("generation_timeout");
+        }
+        catch (OrchestrationException ex) when (ex.Error is OrchestrationError.BudgetExceeded or OrchestrationError.PriceUnknown)
+        {
+            // No provider call was made. The customer decides; nothing continues automatically.
+            try
+            {
+                await queue.RequestDecisionAsync(step.AttemptId, token,
+                    ex.Error == OrchestrationError.BudgetExceeded ? "budget_exceeded" : "model_price_unknown", BudgetOptions, CancellationToken.None);
+                return StepOutcome.Suspended;
+            }
+            catch (OrchestrationException wait) when (wait.Error is OrchestrationError.LeaseLost or OrchestrationError.OutcomeUnknown
+                or OrchestrationError.TransactionAborted)
+            { return StepOutcome.Released; }
         }
         catch (OrchestrationException ex) when (ex.Error is OrchestrationError.LeaseLost or OrchestrationError.OutcomeUnknown
             or OrchestrationError.TransactionAborted)
@@ -121,21 +150,29 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
         catch (OrchestrationException) { }
     }
 
-    private sealed class MeteredProvider(IModelProvider inner, Func<ModelCall, Task> record) : IModelProvider
+    // Conservative input estimate for reservations: about two characters per token plus overhead,
+    // so non-English text and schema/prompt framing are not under-reserved.
+    internal static int EstimateInputTokens(ModelRequest request)
+        => (int)Math.Min(2_000_000L, (request.SystemPrompt.Length + request.UserPrompt.Length + (request.OutputSchema?.JsonSchema.Length ?? 0)) / 2L + 100);
+
+    private sealed class MeteredProvider(IModelProvider inner, Func<ModelCall, Task> record, Func<int, int, Task<Guid>>? reserve) : IModelProvider
     {
         public async Task<ModelResponse> GenerateAsync(ModelRequest request, CancellationToken cancellationToken = default)
         {
+            // Every call is bounded so its worst-case cost can be reserved before it is made.
+            request = request with { MaxOutputTokens = Math.Min(request.MaxOutputTokens ?? DurableWorkflowLimits.MaxOutputTokens, DurableWorkflowLimits.MaxOutputTokens) };
+            Guid? reservation = reserve is null ? null : await reserve(EstimateInputTokens(request), request.MaxOutputTokens!.Value);
             var clock = System.Diagnostics.Stopwatch.StartNew();
             int Elapsed() => (int)Math.Min(clock.ElapsedMilliseconds, 86_400_000);
             ModelResponse response;
             try { response = await inner.GenerateAsync(request, cancellationToken); }
             catch (OperationCanceledException)
             {
-                await record(new ModelCall(null, null, null, null, Elapsed(), ModelCallOutcome.Cancelled)); throw;
+                await record(new ModelCall(null, null, null, null, Elapsed(), ModelCallOutcome.Cancelled, reservation)); throw;
             }
             catch
             {
-                await record(new ModelCall(null, null, null, null, Elapsed(), ModelCallOutcome.Failed)); throw;
+                await record(new ModelCall(null, null, null, null, Elapsed(), ModelCallOutcome.Failed, reservation)); throw;
             }
             var usage = response.Usage;
             await record(new ModelCall(usage?.Provider, usage?.Model ?? response.Model, usage?.InputTokens, usage?.OutputTokens, Elapsed(),
@@ -145,7 +182,7 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
                     ModelResponseStatus.Incomplete => ModelCallOutcome.Incomplete,
                     ModelResponseStatus.Empty => ModelCallOutcome.Empty,
                     _ => ModelCallOutcome.Completed
-                }));
+                }, reservation));
             return response;
         }
     }

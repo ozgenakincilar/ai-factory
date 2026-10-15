@@ -24,13 +24,22 @@ public static class LifecycleEndpoints
             sp.GetRequiredKeyedService<IModelProvider>("lifecycle")));
     }
 
-    public static void MapLifecycle(this WebApplication app)
+    public static void MapLifecycle(this WebApplication app, bool legacyGeneration)
     {
         var group = app.MapGroup("/api/projects/{projectId}").RequireAuthorization();
-        group.MapPost("/work-items", (string projectId, HttpContext http, LifecycleService service, FactoryAuthSettings auth)
-            => Run(http, auth, async actor => await Execute(projectId, null, http, actor, service)));
-        group.MapPost("/work-items/{workItemId:guid}/analysis-architecture", (string projectId, Guid workItemId, HttpContext http, LifecycleService service, FactoryAuthSettings auth)
-            => Run(http, auth, async actor => await Execute(projectId, workItemId, http, actor, service)));
+        // Synchronous generation is retired (unmetered, unbudgeted); reads stay available.
+        if (legacyGeneration)
+        {
+            group.MapPost("/work-items", (string projectId, HttpContext http, LifecycleService service, FactoryAuthSettings auth)
+                => Run(http, auth, async actor => await Execute(projectId, null, http, actor, service)));
+            group.MapPost("/work-items/{workItemId:guid}/analysis-architecture", (string projectId, Guid workItemId, HttpContext http, LifecycleService service, FactoryAuthSettings auth)
+                => Run(http, auth, async actor => await Execute(projectId, workItemId, http, actor, service)));
+        }
+        else
+        {
+            group.MapPost("/work-items", LegacyGeneration.Retired);
+            group.MapPost("/work-items/{workItemId:guid}/analysis-architecture", LegacyGeneration.Retired);
+        }
         group.MapGet("/work-items/{workItemId:guid}", (string projectId, Guid workItemId, HttpContext http, ILifecycleStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor =>
             {
