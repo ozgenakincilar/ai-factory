@@ -11,9 +11,8 @@ into reviewed software and deliver that software through controlled, verifiable 
 The .NET 10 Factory must support multiple projects and application technology stacks while
 preserving human approval, project authorization and traceable evidence.
 
-StockFlow is the first planned end-to-end pilot, on Azure in M14. RiftMind AI remains a
-separate intended product and the original reference application. Neither application's domain
-is a dependency of the Factory.
+StockFlow is the first planned end-to-end pilot, on Azure in M14. Its domain is not a
+dependency of the Factory.
 
 ## Multi-Cloud Deployment & BYOC
 

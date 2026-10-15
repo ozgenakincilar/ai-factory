@@ -26,11 +26,11 @@ The caller may explicitly supply `confirmedRequirements`:
 
 ```json
 {
-  "projectId": "riftmind",
-  "task": "Analyze replay import requirements and identify open questions.",
-  "context": "Desktop coaching application. Supported replay formats are undecided.",
+  "projectId": "sample-project",
+  "task": "Analyze task export requirements and identify open questions.",
+  "context": "Task-list application. Supported export formats are undecided.",
   "confirmedRequirements": [
-    { "id": "USER-1", "description": "Import replay files" }
+    { "id": "USER-1", "description": "Export task lists" }
   ]
 }
 ```

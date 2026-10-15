@@ -7,10 +7,10 @@ namespace Factory.Tests.Analysis;
 public class AnalysisTests
 {
     internal static AnalysisResult Sample => new("Analysis awaiting review",
-        [new("FR-1", "Import replay files", RequirementStatus.Suggested, null)],
-        [new("Replay access is available", "Check the supported data source")],
+        [new("FR-1", "Export task lists", RequirementStatus.Suggested, null)],
+        [new("Task data is available", "Check the supported data source")],
         [new("Data access may be limited", "Evaluate available integrations")],
-        [new("Which replay formats are needed?")]);
+        [new("Which export formats are needed?")]);
 
     internal static string SampleJson => JsonSerializer.Serialize(Sample, AnalysisJson.Options);
 
@@ -75,15 +75,15 @@ public class AnalysisTests
     }
 
     [Theory]
-    [InlineData(null, "Import replay files", false)]
-    [InlineData("unknown", "Import replay files", false)]
-    [InlineData("USER-1", "Import replay files and upload them publicly", false)]
-    [InlineData("USER-1", "import replay files", false)]
-    [InlineData("USER-1", "Import replay files", true)]
+    [InlineData(null, "Export task lists", false)]
+    [InlineData("unknown", "Export task lists", false)]
+    [InlineData("USER-1", "Export task lists and upload them publicly", false)]
+    [InlineData("USER-1", "export task lists", false)]
+    [InlineData("USER-1", "Export task lists", true)]
     public void Validation_ConfirmationRequiresExactCallerEvidence(string? sourceId, string description, bool expected)
     {
         var result = Sample with { FunctionalRequirements = [new("FR-1", description, RequirementStatus.Confirmed, sourceId)] };
-        Assert.Equal(expected, AnalysisValidator.IsValid(result, [new("USER-1", "Import replay files")]));
+        Assert.Equal(expected, AnalysisValidator.IsValid(result, [new("USER-1", "Export task lists")]));
     }
 
     [Fact]

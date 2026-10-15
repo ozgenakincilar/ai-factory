@@ -9,7 +9,7 @@ for required working rules.
 
 | Decision | Status | Rationale and trade-off |
 | --- | --- | --- |
-| Keep a project-agnostic .NET 10 factory | Implemented foundation | RiftMind is a sample target, not a dependency. Domain prompts/contracts can serve other projects; other execution stacks remain future work. |
+| Keep a project-agnostic .NET 10 factory | Implemented foundation | Example target applications are samples, not dependencies. Domain prompts/contracts can serve other projects; other execution stacks remain future work. |
 | Separate API, Core, Orchestration, Infrastructure, Tests | Implemented | Core owns contracts and validators; Orchestration depends only on Core. OpenAI-specific integration stays in Infrastructure. Milestone 4 adds only a fixed sequential workflow service. |
 | Preserve IAgent and IModelProvider signatures | Implemented | Existing callers/providers remain compatible. Optional Analysis input and Architecture output extend shared DTOs; this is a small explicit union rather than a generic agent framework. More agent types may justify revisiting it later. |
 | Keep ChatClient and the current SDK | Implemented | OpenAI 2.14.0 already supports the required strict output format. No Responses migration or SDK upgrade was needed. OpenAI is currently the only concrete provider. |
@@ -210,3 +210,91 @@ Explicitly approved architecture, implemented and committed as 1b93fc4. See
   its signature but cannot create new unlinked cases after migration. Historical bytes/audits stay intact.
 - M6 is synchronous with a command journal, not M7 scheduling: no workers, queues, automatic retry,
   step resume or approval-triggered execution. Unknown outcomes require status/replay reconciliation.
+
+## Domain-Driven Design (2026-10-15, user direction)
+
+Status: **mandatory rule set by the user, for the Factory and for every application it
+generates; no refactoring is authorized by this entry**. New milestones (M7 onward) are designed
+with Domain-Driven Design. Existing Factory code is aligned incrementally, only within explicitly
+approved scopes, consistent with the rules against unrelated refactoring and unnecessary
+abstractions in AGENTS.md. A design that deviates from this rule requires explicit user approval
+recorded in this document; agents must not waive it on their own.
+
+### Generated applications
+
+Every customer application the Factory generates must follow Domain-Driven Design. This applies
+regardless of application size; there is no automatic CRUD-only exemption.
+
+- Analyst/Architect output identifies bounded contexts, a context map, aggregates with their
+  invariants, value objects, domain events where justified, and a ubiquitous-language glossary.
+  These are proposals subject to human review like all architecture output.
+- Application templates (M9) provide a layered structure in which the domain layer has no
+  dependency on infrastructure, web frameworks, persistence or SDKs.
+- The Developer Agent (M10) implements business rules in aggregates and value objects, not in
+  controllers, application services, UI components or database scripts alone.
+- Verification (M11) includes deterministic architecture checks, such as dependency-direction
+  tests, and reports DDD violations as failures. Agent self-assessment is not evidence of
+  conformance.
+- Trade-off: small applications carry additional structure and mapping code; this cost is
+  accepted by the user's decision.
+
+Strategic design. Candidate bounded contexts, to be confirmed with a context map during M7 design:
+
+| Candidate context | Current or planned scope |
+| --- | --- |
+| Identity & Access | Principals, project memberships, Generator/Reviewer roles (5B.1, implemented) |
+| Work Management (Product Lifecycle) | WorkItems, generation commands, runs, lineage (M6, implemented) |
+| Review & Approval | ReviewCases, immutable artifacts, human decisions, receipts (5A/5B.2, implemented) |
+| AI Generation | Agents, requirement analysis, architecture proposals, provider abstraction (M1–M4, implemented) |
+| Workflow Orchestration | Durable runs, steps, attempts, leases (M7, planned) |
+| Tenancy, Usage & Cost | Organizations, budgets, usage records, model routing (M8, planned) |
+| Execution | Templates and isolated runners (M9, planned) |
+| Delivery | Pull requests, cloud deployment, desktop packaging (M11, M13, M16, planned) |
+
+Tactical rules:
+
+- Aggregates own invariants and state transitions; application services coordinate aggregates,
+  transactions and ports without containing business rules.
+- The domain layer has no infrastructure, HTTP, serialization or SDK dependencies.
+- Use value objects where an identifier or value carries validation rules (for example project
+  identity or content hashes) rather than repeated primitive validation.
+- Each context maintains a ubiquitous-language glossary; cross-context integration uses explicit
+  contracts or anti-corruption layers.
+- PostgreSQL guards, grants and deferred checks remain as independent defense in depth. DDD moves
+  rule ownership into the domain model; it does not remove database enforcement.
+
+Observed gaps in the current code (inspected 2026-10-15, not yet corrected):
+
+- `ReviewCase` is a behavior-owning aggregate with state machine rules; this is the existing
+  reference pattern.
+- WorkItem and GenerationCommand have no C# aggregate; their transition and integrity rules live
+  mainly in `ProductLifecycle.sql` functions and triggers, with records/DTOs in Core.
+- `Factory.Core` mixes domain types with application/transport concerns: `GenerationOutcome`
+  carries `HttpStatus`, `WorkItemSnapshot` formats an HTTP ETag, `LifecycleLimits` includes a
+  request byte limit, and JSON schema classes sit beside analysis/architecture models.
+- Identifiers and hashes are mostly primitives (`string` project IDs, `string` hashes, `Guid`).
+- Contexts are namespaces within one Core project and one `ReviewDbContext`; no context map or
+  glossary exists yet. Template `Class1.cs` files remain.
+
+Trade-offs: explicit contexts and aggregates make rules testable and keep future milestones from
+coupling, at the cost of more types and mapping code. Moving rules out of SQL must not weaken the
+current database-enforced integrity evidence; any such change requires its own review and
+verification.
+
+## Desktop application technology (2026-10-15, future M16 direction)
+
+Status: **user decision; not implemented**. Generated desktop applications (M16) will use
+Electron. This records direction only; it adds no dependency, template, packaging or code, and
+does not authorize M16 or any earlier milestone.
+
+- Rationale: reuse the planned Angular application templates (M9) and Product Workspace UI
+  patterns (M12) so web and desktop variants of a generated application can share one frontend.
+- Boundary: desktop packaging remains separate from cloud deployment and source delivery (see
+  the Multi-Cloud decision above). The Electron, packaging and signing toolchain versions are
+  chosen and pinned during M16 design, verified against current official documentation.
+- Security baseline to define at M16 design: follow the official Electron security guidance,
+  including renderer process isolation, no Node.js access in renderers, validated IPC and
+  restricted loading of remote content. Exact settings are not yet specified or verified.
+- Trade-offs: larger installers and higher memory use than native .NET desktop options, and a
+  recurring obligation to ship bundled Chromium security updates. Code signing, auto-update and
+  installer formats per operating system remain open questions.

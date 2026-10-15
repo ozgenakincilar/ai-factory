@@ -77,6 +77,61 @@ Tasks:
 Acceptance criteria: Usage and estimated costs are attributable to a specific workflow/project;
 tenant isolation and budget policies have automated tests.
 
+### Cost-aware model routing — open design questions
+
+Status: **requirement recorded 2026-10-15; not designed or implemented**. Customers building
+applications need cost management through task-appropriate model selection. Today one configured
+model (`OpenAI:Model`, default `gpt-4o-mini`) serves all agents and projects, and no token usage
+is recorded. The questions below must be answered in M8 design before implementation.
+
+User requirement (2026-10-15): a customer request is decomposed into parts, and a router decides
+which model handles each part. Complex or important work uses strong models; simpler work uses
+cheaper or different models. Example: for a requested accounting application, ledger/posting
+rules, tax logic, data model and security design would be complex/important, while boilerplate
+CRUD screens, test-data generation, formatting or summaries would be simpler.
+
+Implications to resolve in design:
+
+- Decomposition is itself an LLM task whose quality bounds every later step; which model plans
+  the decomposition, and is the resulting plan human-reviewed before routing?
+- The router needs a classification of each part (complexity and importance/risk). Importance
+  should be able to override low complexity: a short financial rule is still high risk.
+- Per-part routing depends on step-level workflow records, so it builds on M7 durable workflow
+  steps and M8 usage recording rather than on the current single synchronous M6 generation.
+- Cheaper models do not remove human approval gates; high-risk parts keep their review gates.
+
+Proposed direction (recommendation, not a decision):
+
+- Record usage first; routing without measured cost and quality data is guesswork.
+- Route by configurable policy keyed on agent role and task type, with tenant/project overrides
+  bounded by budgets.
+- Implement routing behind `IModelProvider` so agent contracts stay unchanged.
+- Record the selected model, the policy reason and actual usage per run as evidence. Never
+  silently downgrade quality; report validation failures explicitly.
+
+Open questions:
+
+1. Routing unit: the user requirement sets it at decomposed parts of a request; how granular a
+   part is (feature, workflow step, or individual model call) remains open.
+2. Criteria: complexity and importance are required; are input size, budget remaining, latency
+   targets and provider availability also used, and who or what assigns the classification
+   (decomposition model, rules, or human review)?
+3. Who configures policies: platform defaults, tenant administrators, project owners, or all
+   three with defined precedence?
+4. Fallback and escalation: when a cheaper model's output fails schema/provenance validation,
+   may the router retry with a stronger model? Each retry consumes budget and must be bounded,
+   recorded and visible; M6 currently forbids automatic application retries.
+5. Bring-your-own-key: does routing apply to customer-supplied keys and providers, and who
+   bears cost when a policy selects a model the customer's key cannot access?
+6. Multi-provider: are non-OpenAI providers in scope for M8, or is initial routing limited to
+   models of a single provider?
+7. Quality guardrails: which roles (for example Architect or Developer) require a minimum model
+   tier regardless of budget, and how is quality measured to justify routing changes?
+8. Cost data: source and refresh of model price tables, and treatment of estimated versus
+   provider-reported actual cost.
+9. Determinism and audit: must a replayed or reviewed run identify the exact model and policy
+   version that produced each artifact?
+
 ## M9 — Application Templates & Secure Execution
 
 Status: planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
@@ -86,7 +141,8 @@ isolated build environment.
 
 Tasks:
 
-- Build a versioned starter template.
+- Build a versioned starter template with a mandatory Domain-Driven Design layer structure
+  (domain layer free of infrastructure/framework dependencies; see [DDD decision](DECISIONS.md#domain-driven-design-2026-10-15-user-direction)).
 - Add a minimal template registry.
 - Create isolated per-job Git workspaces.
 - Add ephemeral build/test runners.
@@ -114,9 +170,11 @@ Tasks:
 - Add controlled build-feedback correction loops.
 - Enforce iteration, tool-call, context and token budgets.
 - Associate code changes with requirements and tasks.
+- Implement business rules in aggregates and value objects per the mandatory DDD rule.
 
 Acceptance criteria: The Developer Agent can implement the StockFlow Product CRUD feature in
 an isolated Git workspace, produce a reviewable diff and associate changes with approved requirements.
+The implementation follows the approved bounded contexts and aggregates.
 
 ## M11 — Verification Agent & GitHub Pull Request
 
@@ -128,6 +186,7 @@ Tasks:
 
 - Create deterministic .NET and Angular verification pipelines.
 - Run build, tests, static checks and dependency/security scanning.
+- Run deterministic DDD architecture checks (for example dependency-direction tests) and fail on violations.
 - Record exit codes, commit SHA and test-run evidence.
 - Distinguish verified results from agent-reported results.
 - Analyze failures and generate corrective tasks.
@@ -172,7 +231,7 @@ not validated commitments. TBD means that no duration estimate has been supplied
 | M13C | Google Cloud deployment provider | P2 | TBD | Versioned/tested Google Cloud modules and provider-specific verification for both ownership models, with documented capability differences. |
 | M14 | Azure-only StockFlow end-to-end pilot | P1 | 2–3 weeks | Exercise the approved Factory workflow through an Azure deployment, human approval, health verification, release evidence and a documented recovery exercise. AWS/GCP support is not a prerequisite. |
 | M15 | SaaS beta hardening | P2 | 3–5 weeks | Document verified tenant isolation, credential security, operational recovery and access controls before handling real customer data in a limited commercial beta; detailed scope below. |
-| M16 | Desktop application generation, packaging and delivery | P2 | TBD | Generate desktop applications and deliver versioned desktop packages with installation/verification evidence and documented recovery procedures, separately from cloud application deployment and source-code artifact delivery. |
+| M16 | Desktop application generation, packaging and delivery | P2 | TBD | Generate Electron-based desktop applications (see [decision](DECISIONS.md#desktop-application-technology-2026-10-15-future-m16-direction)) and deliver versioned desktop packages with installation/verification evidence and documented recovery procedures, separately from cloud application deployment and source-code artifact delivery. |
 
 The M13A **2–4 week estimate originated from the earlier Azure deployment milestone**. It is
 provisional and **subject to re-estimation for Terraform/BYOC**, not a validated estimate for
@@ -217,7 +276,7 @@ not evidence that M15 has already been completed.
 - M13A uses Terraform for Azure staging deployment; M13B and M13C extend deployment to AWS and GCP.
 - M14 is the Azure-only end-to-end StockFlow pilot; AWS/GCP deployment is not a prerequisite.
 - M15 focuses on SaaS beta hardening.
-- M16 covers desktop application generation, packaging and delivery.
+- M16 covers desktop application generation, packaging and delivery, using Electron (user decision, not implemented).
 
 ## Common deployment acceptance requirements
 

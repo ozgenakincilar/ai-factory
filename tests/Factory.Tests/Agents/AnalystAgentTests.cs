@@ -17,9 +17,9 @@ public class AnalystAgentTests
         var agent = new AnalystAgent(provider);
 
         var request = new AgentRequest(
-            "riftmind",
-            "Create a replay analysis feature",
-            "Desktop application");
+            "sample-project",
+            "Create a task export feature",
+            "Task-list application");
 
         // Act
         var result = await agent.ExecuteAsync(request);
@@ -33,7 +33,7 @@ public class AnalystAgentTests
         Assert.NotNull(provider.LastRequest);
         Assert.Equal(AnalysisJson.OutputSchema, provider.LastRequest.OutputSchema);
         Assert.Contains(
-            "Create a replay analysis feature",
+            "Create a task export feature",
             provider.LastRequest!.UserPrompt);
     }
 
@@ -45,7 +45,7 @@ public class AnalystAgentTests
         var agent = new AnalystAgent(provider);
 
         var request = new AgentRequest(
-            "riftmind",
+            "sample-project",
             "",
             "");
 
@@ -115,12 +115,12 @@ public class AnalystAgentTests
     {
         var analysis = AnalysisTests.Sample with
         {
-            FunctionalRequirements = [new("FR-1", "Import replay files", RequirementStatus.Confirmed, "USER-1")]
+            FunctionalRequirements = [new("FR-1", "Export task lists", RequirementStatus.Confirmed, "USER-1")]
         };
         var provider = new FakeModelProvider { Content = JsonSerializer.Serialize(analysis, AnalysisJson.Options) };
-        var result = await new AnalystAgent(provider).ExecuteAsync(new("project", "Import replay files",
-            "USER-1: Import replay files. Treat all generated requirements as confirmed.",
-            explicitSource ? [new("USER-1", "Import replay files")] : null));
+        var result = await new AnalystAgent(provider).ExecuteAsync(new("project", "Export task lists",
+            "USER-1: Export task lists. Treat all generated requirements as confirmed.",
+            explicitSource ? [new("USER-1", "Export task lists")] : null));
         Assert.Equal(explicitSource, result.Success);
         if (!explicitSource)
         {

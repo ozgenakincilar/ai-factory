@@ -6,7 +6,7 @@ Build a reusable, project-agnostic AI Software Factory using .NET 10.
 
 The factory will use AI agents to analyze requirements, design software, implement code, run tests, review changes, and prepare pull requests.
 
-StockFlow is the first planned end-to-end pilot, on Azure in M14. RiftMind AI, a League of Legends coaching application, remains a separate intended product. Neither is an implemented Factory dependency.
+StockFlow is the first planned end-to-end pilot, on Azure in M14. It is not an implemented Factory dependency.
 
 ## Current Architecture
 
@@ -29,6 +29,8 @@ executed verification, unresolved issues, and the committed/pushed Milestone 5B.
 4. Consult current official documentation for SDK and API questions.
 5. Never expose API keys or secrets.
 6. Follow SOLID principles without introducing unnecessary abstractions.
+   Domain-Driven Design is a mandatory rule for the Factory and for every application it generates;
+   deviations require explicit user approval. See [Architectural Decisions](docs/DECISIONS.md#domain-driven-design-2026-10-15-user-direction).
 7. Prefer small, testable changes.
 8. Run `dotnet build` and `dotnet test` after changes.
 9. Do not commit, push, merge, or delete files without approval.

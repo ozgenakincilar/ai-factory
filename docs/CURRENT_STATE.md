@@ -57,7 +57,7 @@ reconciliation.
 **At the 5B.2 handoff, the next planned milestone was M6.** Architectural approval
 was required before implementation. At that checkpoint M6–M16 capabilities in [Roadmap](ROADMAP.md) were planned,
 including Terraform/Multi-Cloud/BYOC; documentation approval does not implement them. StockFlow
-is the first planned end-to-end pilot on Azure; RiftMind AI remains a separate intended product.
+is the first planned end-to-end pilot on Azure.
 
 See [Human Decisions](HUMAN_DECISIONS.md) for the approved five security requirements, endpoint
 contracts, transaction design, migration/grant setup, exact executed evidence and limitations.
@@ -171,8 +171,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 5B.2 | Committed/pushed secure human approval transactions, e1bced7; see HUMAN_DECISIONS.md |
 | 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer unverified, see PRODUCT_LIFECYCLE.md |
 
-StockFlow is the first planned end-to-end pilot; RiftMind AI is a separate intended product.
-Neither is an implemented product or Factory dependency. No implementation/test/review agent,
+StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
+dependency. No implementation/test/review agent,
 code execution, MCP integration, GitHub automation, queue or generic workflow engine is implemented.
 5A supplies persistent artifacts and publication audit; 5B.1 supplies authentication/project
 authorization; 5B.2 adds human decision audit and durable receipts for existing stored cases.
