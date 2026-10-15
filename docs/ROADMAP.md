@@ -72,6 +72,7 @@ Tasks:
 - Track estimated and actual usage costs separately.
 - Add workflow budgets, reservations, limits and quotas.
 - Add initial cost-aware routing policies.
+- Support customer-provided models: customer API keys (BYOK) and customer-hosted model endpoints.
 - Preserve provider-neutral model interfaces.
 
 Acceptance criteria: Usage and estimated costs are attributable to a specific workflow/project;
@@ -121,8 +122,8 @@ Open questions:
 4. Fallback and escalation: when a cheaper model's output fails schema/provenance validation,
    may the router retry with a stronger model? Each retry consumes budget and must be bounded,
    recorded and visible; M6 currently forbids automatic application retries.
-5. Bring-your-own-key: does routing apply to customer-supplied keys and providers, and who
-   bears cost when a policy selects a model the customer's key cannot access?
+5. Customer-provided models (required, see below): how do customer keys and endpoints join
+   the routing pool, and what happens when a policy selects a model the customer cannot access?
 6. Multi-provider: are non-OpenAI providers in scope for M8, or is initial routing limited to
    models of a single provider?
 7. Quality guardrails: which roles (for example Architect or Developer) require a minimum model
@@ -131,6 +132,89 @@ Open questions:
    provider-reported actual cost.
 9. Determinism and audit: must a replayed or reviewed run identify the exact model and policy
    version that produced each artifact?
+
+### Customer-provided models — requirement
+
+Status: **user requirement recorded 2026-10-15; not designed or implemented**. Today a single
+Factory-wide OpenAI key and model serve every project; `IModelProvider` has one implementation.
+
+Customers may use their own models for flexibility and security, in two forms:
+
+- **A. Customer API keys (BYOK):** a customer supplies its own key for a supported commercial
+  provider (for example OpenAI, Anthropic or Azure OpenAI). Provider cost is billed to the customer.
+- **B. Customer-hosted models:** a customer supplies its own model endpoint, such as a
+  self-hosted, fine-tuned or private-network deployment, so prompts and generated content can
+  stay within customer-controlled infrastructure.
+
+Security requirements (both forms):
+
+- Store customer credentials per tenant, encrypted in a secret store; never place them in
+  prompts, logs, artifacts, responses or agent-accessible tools. Support rotation and revocation.
+- Only authorized tenant administrators can register, change or remove a key or endpoint; every
+  change is audited. A project uses only its own tenant's keys and endpoints.
+- Customer-hosted endpoints require HTTPS with certificate validation, explicit registration and
+  egress controls that prevent server-side request forgery into Factory or other tenants'
+  networks. Private-network connectivity requires a separately designed, approved mechanism.
+- Model responses remain untrusted input: the same strict schema, provenance and safety
+  validation applies to every model; validation is never relaxed for a customer model.
+
+Capability and quality requirements:
+
+- No vendor, model or hosting restriction (user requirement, 2026-10-15): customers may register
+  any provider or self-hosted model. OpenAI-compatible endpoints are supported generically; other
+  protocols are supported through provider adapters added as needed. The Factory never limits
+  which customer model may be chosen; it only informs.
+- Maintain a capability profile per registered model (for example strict structured output,
+  context window, tool use) and measure it with a registration test.
+- When a customer model lacks a capability or falls below the recommended tier for a part, the
+  customer is informed and decides (see below); the Factory does not reject the choice on its own.
+- Freedom of choice does not relax security or validation: credential protection, egress/SSRF
+  controls, transport security and strict output validation still apply. Output that fails
+  validation is reported as a failure and is never accepted as a valid artifact.
+- Record provider/endpoint identity, model, usage and validation outcome per call as evidence,
+  so an artifact identifies which customer model produced it.
+
+Informed customer decision (user requirement, 2026-10-15): the Factory does not decide on the
+customer's behalf. When a choice affects where customer data is processed, cost or quality, the
+Factory pauses the affected part, informs the customer and acts only on the customer's decision:
+
+- Situations: a customer model lacks a required capability or minimum tier; a customer endpoint
+  is unavailable or fails validation; a part would run on a Factory-hosted model instead of the
+  customer's own; and whether all parts must run only on customer models (data residency mode).
+- The notice states, in plain language, the affected part, the reason, the available options
+  (for example use a Factory-hosted model for this part, retry later, change the model, or stop)
+  and each option's data-location, cost and quality implications.
+- There is no automatic fallback to Factory-hosted models. Until the customer decides, the
+  affected part waits; work that does not depend on it may continue only if the customer allowed it.
+- Only an authorized tenant administrator or project owner decides. Decisions are scoped
+  (single part, project or tenant default), audited with the decider's identity and time, and
+  revocable for future work. A standing default applies only within the scope the customer chose.
+
+Notice delivery (user requirement, 2026-10-15): notices are delivered only inside the Factory
+application (Product Workspace, M12), as a popup shown to authorized users while they have the
+application open. There is no email or external API notification channel. A notice raised while
+no authorized user is online appears when one next opens the application.
+
+- The popup is a view of a durable, server-side pending decision, not the decision record itself.
+  A notice is not lost if the user is offline, closes the popup or the browser; it remains in an
+  in-app list of pending decisions until decided, cancelled or expired.
+- The popup shows decision actions only to users authorized to decide; other project members see
+  the pending state without actions.
+- The decision is submitted to and validated by the server (authorization, scope, current state
+  and freshness); the browser is never the authority. A stale or already-decided notice is rejected.
+- A popup must not preselect an option or make "use a Factory-hosted model" the easiest default
+  action; the data-location implications must be visible before confirmation.
+- Blocking (user requirement, 2026-10-15): the affected work cannot continue until the popup is
+  resolved by a decision. The popup is modal for authorized users and closes only when one of
+  its options is chosen ("stop" is always one of them); there is no dismiss-without-decision.
+  There is no automatic timeout or cancellation: the part waits until a decision is made.
+- Consequence: undecided work stays paused indefinitely and keeps its workflow state. Whether a
+  paused part holds budget reservations or execution capacity while waiting must be defined in
+  M7/M8 design so that waiting does not block other projects.
+
+Remaining open question: which provider adapters beyond OpenAI-compatible endpoints are built
+first. Waiting for customer decisions depends on M7 durable
+workflow states; the popup depends on M12.
 
 ## M9 — Application Templates & Secure Execution
 
@@ -213,6 +297,8 @@ Tasks:
 - Add roadmap, milestones, backlog and task views.
 - Display workflow history and agent activity.
 - Display model/token costs and budgets.
+- Show pending customer model decisions as in-app popups backed by a durable pending-decision
+  list (see Customer-provided models under M8).
 - Display PR links, verification results and downloadable artifacts.
 
 Acceptance criteria: A user can initiate a project, track its workflow, review/approve outputs
