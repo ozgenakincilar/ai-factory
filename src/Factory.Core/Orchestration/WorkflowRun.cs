@@ -1,14 +1,16 @@
 namespace Factory.Core.Orchestration;
 
-public enum RunStatus { Queued, Running, Succeeded, Failed }
+public enum RunStatus { Queued, Running, Waiting, Succeeded, Failed, Cancelled }
 public enum StepKind { Analysis, Architecture, Publication }
-public enum StepStatus { Pending, Running, Succeeded, Failed, Cancelled }
+public enum StepStatus { Pending, Running, Waiting, Succeeded, Failed, Cancelled }
 
-public sealed record WorkflowStep(int Ordinal, StepKind Kind, StepStatus Status, int Attempts);
+// Abandoned counts lost leases only; a suspended (waiting) attempt does not consume the bound.
+public sealed record WorkflowStep(int Ordinal, StepKind Kind, StepStatus Status, int Attempts, int Abandoned = 0);
 
 // Aggregate root for one durable run: owns the step plan and transition rules. PostgreSQL
 // independently enforces the same persisted transitions; neither layer replaces the other.
-// M7.1 executes steps strictly in order; at most one step of a run is Running.
+// Steps execute strictly in order; at most one step is Running or Waiting. Parallel parts
+// arrive with M8 request decomposition (see DECISIONS.md).
 public sealed class WorkflowRun
 {
     private readonly WorkflowStep[] _steps;
@@ -21,7 +23,8 @@ public sealed class WorkflowRun
     {
         var plan = Plan(DurableWorkflowLimits.WorkflowVersion);
         if (id == Guid.Empty || !Enum.IsDefined(status) || steps.Length != plan.Count ||
-            steps.Where((s, i) => s.Ordinal != i || s.Kind != plan[i] || s.Attempts < 0 || !Enum.IsDefined(s.Status)).Any() ||
+            steps.Where((s, i) => s.Ordinal != i || s.Kind != plan[i] || s.Attempts < 0 || s.Abandoned < 0 ||
+                s.Abandoned > s.Attempts || !Enum.IsDefined(s.Status)).Any() ||
             (status == RunStatus.Failed) != failure is not null)
             throw new OrchestrationException(OrchestrationError.Integrity);
         Id = id; Status = status; FailureCode = failure; _steps = steps;
@@ -41,7 +44,10 @@ public sealed class WorkflowRun
     public static int MaxAttempts(StepKind kind) => kind == StepKind.Publication
         ? DurableWorkflowLimits.MaxPublicationAttempts : DurableWorkflowLimits.MaxModelStepAttempts;
 
-    public WorkflowStep? NextRunnable() => Status is RunStatus.Queued or RunStatus.Running && _steps.All(s => s.Status != StepStatus.Running)
+    public bool IsTerminal => Status is RunStatus.Succeeded or RunStatus.Failed or RunStatus.Cancelled;
+
+    public WorkflowStep? NextRunnable() => Status is RunStatus.Queued or RunStatus.Running &&
+        _steps.All(s => s.Status is not (StepStatus.Running or StepStatus.Waiting))
         ? _steps.FirstOrDefault(s => s.Status == StepStatus.Pending) : null;
 
     public WorkflowStep? Running => _steps.SingleOrDefault(s => s.Status == StepStatus.Running);
@@ -49,7 +55,7 @@ public sealed class WorkflowRun
     public void Start(int ordinal)
     {
         if (NextRunnable()?.Ordinal != ordinal) throw new OrchestrationException(OrchestrationError.Conflict);
-        Set(ordinal, StepStatus.Running, _steps[ordinal].Attempts + 1);
+        Set(ordinal, StepStatus.Running, attempts: _steps[ordinal].Attempts + 1);
         Status = RunStatus.Running;
     }
 
@@ -69,13 +75,42 @@ public sealed class WorkflowRun
         Status = RunStatus.Failed; FailureCode = failureCode;
     }
 
-    // A lost lease is not a model failure: the step may run again until its attempt bound.
+    // A lost lease is not a model failure: the step may run again until its lost-lease bound.
     // Re-execution can repeat an external provider call; nothing here is exactly-once.
     public void Abandon(int ordinal)
     {
         RequireRunning(ordinal);
-        if (_steps[ordinal].Attempts < MaxAttempts(_steps[ordinal].Kind)) Set(ordinal, StepStatus.Pending);
+        var abandoned = _steps[ordinal].Abandoned + 1;
+        Set(ordinal, StepStatus.Running, abandoned: abandoned);
+        if (abandoned < MaxAttempts(_steps[ordinal].Kind)) Set(ordinal, StepStatus.Pending);
         else Fail(ordinal, "step_attempts_exhausted");
+    }
+
+    // The step pauses for a human decision without holding a lease or a timeout.
+    public void Suspend(int ordinal)
+    {
+        RequireRunning(ordinal);
+        if (_steps[ordinal].Kind == StepKind.Publication) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        Set(ordinal, StepStatus.Waiting);
+        Status = RunStatus.Waiting;
+    }
+
+    public void Resume(int ordinal)
+    {
+        if (Status != RunStatus.Waiting || ordinal < 0 || ordinal >= _steps.Length || _steps[ordinal].Status != StepStatus.Waiting)
+            throw new OrchestrationException(OrchestrationError.Conflict);
+        Set(ordinal, StepStatus.Pending);
+        Status = RunStatus.Running;
+    }
+
+    // Cancelling an already cancelled run is a no-op; finished runs cannot be cancelled.
+    public void Cancel()
+    {
+        if (Status == RunStatus.Cancelled) return;
+        if (IsTerminal) throw new OrchestrationException(OrchestrationError.Conflict);
+        foreach (var step in _steps.Where(s => s.Status is StepStatus.Pending or StepStatus.Running or StepStatus.Waiting))
+            Set(step.Ordinal, StepStatus.Cancelled);
+        Status = RunStatus.Cancelled;
     }
 
     private void RequireRunning(int ordinal)
@@ -84,23 +119,26 @@ public sealed class WorkflowRun
             throw new OrchestrationException(OrchestrationError.Conflict);
     }
 
-    private void Set(int ordinal, StepStatus status, int? attempts = null)
-        => _steps[ordinal] = _steps[ordinal] with { Status = status, Attempts = attempts ?? _steps[ordinal].Attempts };
+    private void Set(int ordinal, StepStatus status, int? attempts = null, int? abandoned = null)
+        => _steps[ordinal] = _steps[ordinal] with { Status = status, Attempts = attempts ?? _steps[ordinal].Attempts,
+            Abandoned = abandoned ?? _steps[ordinal].Abandoned };
 
     private bool Consistent()
     {
-        var firstOpen = Array.FindIndex(_steps, s => s.Status != StepStatus.Succeeded);
-        var prefixDone = _steps.Select((s, i) => s.Status is StepStatus.Pending or StepStatus.Cancelled ||
+        bool Any(params StepStatus[] statuses) => _steps.Any(s => statuses.Contains(s.Status));
+        var ordered = _steps.Select((s, i) => s.Status is StepStatus.Pending or StepStatus.Cancelled ||
             _steps.Take(i).All(p => p.Status == StepStatus.Succeeded)).All(x => x);
-        return prefixDone && _steps.Count(s => s.Status == StepStatus.Running) <= 1 &&
-            _steps.All(s => s.Status == StepStatus.Pending ? true : s.Attempts > 0 || s.Status == StepStatus.Cancelled) &&
+        var active = _steps.Count(s => s.Status is StepStatus.Running or StepStatus.Waiting);
+        return ordered && active <= 1 &&
+            _steps.All(s => s.Status is StepStatus.Pending or StepStatus.Cancelled || s.Attempts > 0) &&
             Status switch
             {
                 RunStatus.Queued => _steps.All(s => s.Status == StepStatus.Pending && s.Attempts == 0),
-                RunStatus.Running => firstOpen >= 0 && _steps.All(s => s.Status is not (StepStatus.Failed or StepStatus.Cancelled)),
-                RunStatus.Succeeded => firstOpen < 0,
-                RunStatus.Failed => _steps.Count(s => s.Status == StepStatus.Failed) == 1 &&
-                    _steps.All(s => s.Status is not (StepStatus.Pending or StepStatus.Running)),
+                RunStatus.Running => !Any(StepStatus.Waiting, StepStatus.Failed, StepStatus.Cancelled) && Any(StepStatus.Pending, StepStatus.Running),
+                RunStatus.Waiting => _steps.Count(s => s.Status == StepStatus.Waiting) == 1 && !Any(StepStatus.Running, StepStatus.Failed, StepStatus.Cancelled),
+                RunStatus.Succeeded => _steps.All(s => s.Status == StepStatus.Succeeded),
+                RunStatus.Failed => _steps.Count(s => s.Status == StepStatus.Failed) == 1 && !Any(StepStatus.Pending, StepStatus.Running, StepStatus.Waiting),
+                RunStatus.Cancelled => !Any(StepStatus.Pending, StepStatus.Running, StepStatus.Waiting, StepStatus.Failed),
                 _ => false
             };
     }

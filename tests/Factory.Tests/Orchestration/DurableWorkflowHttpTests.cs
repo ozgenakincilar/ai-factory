@@ -59,6 +59,44 @@ public class DurableWorkflowHttpTests
         using (var unknown = await client.GetAsync($"/api/projects/{f.Project}/runs/{Guid.NewGuid():D}")) Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 
+    [OrchestrationFact]
+    public async Task HumanDecisionAndCancellationEndpointsUseStrictBodiesAndSafeViews()
+    {
+        await Durable.Drain(); await using var f = await LifecycleFixture.Create();
+        using var factory = Factory(); using var client = Client(factory, f);
+        var run = await Durable.Submit(f); var token = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        var step = (await Durable.Worker.ClaimAsync("worker", token))!;
+        var decision = await Durable.Worker.RequestDecisionAsync(step.AttemptId, token, "customer_model_insufficient", ["use_factory_model", "stop"]);
+        HttpRequestMessage Decide(string body) => new(HttpMethod.Post, $"/api/projects/{f.Project}/runs/{run.RunId:D}/decisions/{decision:D}")
+            { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        using (var waiting = await client.GetAsync($"/api/projects/{f.Project}/runs/{run.RunId:D}"))
+        {
+            using var json = JsonDocument.Parse(await waiting.Content.ReadAsStringAsync());
+            Assert.Equal("waiting", json.RootElement.GetProperty("status").GetString());
+            var pending = json.RootElement.GetProperty("decisions")[0];
+            Assert.Equal(("pending", "customer_model_insufficient"), (pending.GetProperty("status").GetString(), pending.GetProperty("reason").GetString()));
+        }
+        foreach (var bad in new[] { """{"choice":"use_factory_model","extra":1}""", """{"choice":"Use Factory"}""", "[]", """{"choice":"retry_later"}""" })
+        {
+            using var request = Decide(bad); using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+        using (var request = Decide("""{"choice":"use_factory_model"}""")) using (var decided = await client.SendAsync(request))
+        {
+            Assert.Equal(HttpStatusCode.OK, decided.StatusCode);
+            using var json = JsonDocument.Parse(await decided.Content.ReadAsStringAsync());
+            Assert.Equal("running", json.RootElement.GetProperty("status").GetString());
+        }
+        using (var cancel = await client.PostAsync($"/api/projects/{f.Project}/runs/{run.RunId:D}/cancel", null))
+        {
+            Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+            using var json = JsonDocument.Parse(await cancel.Content.ReadAsStringAsync());
+            Assert.Equal("cancelled", json.RootElement.GetProperty("status").GetString());
+        }
+        using (var anonymous = factory.CreateClient()) using (var response = await anonymous.PostAsync($"/api/projects/{f.Project}/runs/{run.RunId:D}/cancel", null))
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     private static WebApplicationFactory<Program> Factory()
         => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {

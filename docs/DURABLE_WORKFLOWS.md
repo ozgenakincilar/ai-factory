@@ -1,8 +1,11 @@
-# Milestone 7.1 — Durable Workflow Orchestration
+# Milestone 7 — Durable Workflow Orchestration
 
-Status: approved design, **implemented local candidate (uncommitted)**, 2026-10-15. M7.2 (waiting,
-parallel steps, cancellation) and M7.3 (real-time push) are not implemented. This document
-describes inspected code and executed local verification, not production readiness.
+Status: M7.1 committed and pushed as `bcd50fa`. M7.2 (human-decision waiting and cancellation)
+implemented and verified on 2026-10-15 under the user's full approval; see
+[M7.2](#milestone-72--waiting-for-human-decisions-and-cancellation). Parallel steps are deferred
+to M8 (see [Architectural Decisions](DECISIONS.md#milestone-72-scope-2026-10-15)). M7.3 (real-time
+push) is not implemented. This document describes inspected code and executed local verification,
+not production readiness. Sections up to "Limits" describe M7.1.
 
 ## Model (Workflow Orchestration bounded context)
 
@@ -116,3 +119,64 @@ but was not itself executed; the test launched the built executable directly.
   on database clock; long GC pauses beyond the lease can cause duplicate provider calls.
 - No waiting state, parallel steps, cancellation, real-time push, global LLM budget or model
   routing; these belong to M7.2, M7.3 and M8.
+
+## Milestone 7.2 — Waiting for human decisions and cancellation
+
+Additive migration `20261015230000_DurableWorkflowDecisions` (embedded `DurableWorkflowDecisions.sql`);
+the released M7.1 migration is unchanged. Existing rows stay valid and no history is rewritten.
+
+- **Waiting.** A worker holding a Running Analysis or Architecture step may call
+  `request_decision` with a static reason code and 2–8 static option codes that always include
+  `stop`. The attempt ends as `Suspended`, the step and run become `Waiting`, and a Pending
+  `StepDecision` is recorded. The step holds no lease and consumes no worker capacity; there is no
+  timeout and no automatic default. Publication can never wait. In M7.2 no production step
+  requests a decision yet; M8 customer-model routing is the intended producer.
+- **Deciding.** `POST /api/projects/{projectId}/runs/{runId}/decisions/{decisionId}` with exactly
+  `{"choice":"<offered code>"}`. Only an active Human project Reviewer may decide, locked against
+  revocation; this is an interim authority until M8 tenant administrator/project owner roles.
+  A repeated identical decision is a replay; a different choice on a settled decision is 409.
+  Any non-`stop` choice returns the step to Pending; the next claim delivers the step's decided
+  choices in `ClaimedStep.Decisions`. `stop` cancels the run.
+- **Cancellation.** `POST /api/projects/{projectId}/runs/{runId}/cancel` (Generator). Queued,
+  Running or Waiting runs become Cancelled with the canceller recorded; pending decisions are
+  cancelled; a Running attempt becomes `Cancelled`, so its worker loses the lease at its next
+  renew, complete or fail (an in-flight provider call is not interrupted before that). Repeating
+  a cancel returns the cancelled view; finished runs cannot be cancelled (409).
+- **Attempt bound.** Only `Abandoned` (lost-lease) attempts count toward the 2/3 bound; suspended
+  attempts do not. Run and step views report `abandoned` computed from attempts.
+- **Capacity.** Waiting runs count toward the 20 active runs per project.
+- **Least privilege.** `cancel` and `decide` are executable only by `factory_lifecycle_runtime`;
+  `request_decision` only by `factory_orchestration_worker`; neither role can read or change
+  `StepDecisions` directly. Run views expose decision id, step, reason, options, status and choice,
+  never the decider's identity.
+
+### Executed verification — 2026-10-15
+
+SDK 10.0.103, working tree on top of `bcd50fa`; no live LLM calls.
+
+1. The new migration was replayed inside `BEGIN … SET CONSTRAINTS ALL IMMEDIATE … ROLLBACK` on the
+   M7.1 database that holds the live-run data, then applied for real by the initializer (upgrade
+   path: seven migrations; the live crash-test run still reads `Succeeded` with `abandoned`=1).
+2. Fresh initialization of `factory_m72_verify_20261015` and `-BaselineOnly`
+   `factory_m72_verify_20261015_legacy`.
+3. Unit tests: 25 passed (aggregate, decision codes, processor).
+4. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **745 passed, 0 failed, 0 skipped** (734 existing + 11 new), including
+   four live Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-15_22_57_50.trx`,
+   SHA-256 `047b2dffde2c3df496859ca1b05ee3983096b78a61c5ce5264f0aaa093b1ede3`.
+5. Keycloak and PostgreSQL stopped; data preserved.
+
+New cases cover a waiting step surviving lease recovery and other workers, resuming only after a
+human decision and completing publication; replayed and conflicting decisions; `stop` cancelling
+the run; cancellation revoking a running lease; finished runs not cancellable; Service, non-member,
+revoked-Reviewer and cross-project deciders refused; non-offered choices and unknown decisions;
+database rejection of invalid reasons/options and of waiting publication; role separation; and
+HTTP strict bodies for decide/cancel.
+
+### M7.2 limits
+
+- No production step requests decisions yet; the waiting path is exercised by tests through the
+  worker port. Notification delivery (popup, real-time push) is M7.3/M12.
+- Cancellation does not abort an in-flight provider call immediately; the worker stops at its next
+  lease check (heartbeat 20 s) and the call may still be billed.
+- Deciders are interim Human project Reviewers until M8 introduces tenant roles.

@@ -213,7 +213,7 @@ Explicitly approved architecture, implemented and committed as 1b93fc4. See
 
 ## Milestone 7 durable orchestration design (2026-10-15, approved)
 
-User-approved design; M7.1 implemented as a local candidate. See [Durable Workflows](DURABLE_WORKFLOWS.md).
+User-approved design; M7.1 committed as `bcd50fa`. See [Durable Workflows](DURABLE_WORKFLOWS.md).
 
 - New Workflow Orchestration bounded context: `WorkflowRun` aggregate, steps and attempts.
 - Separate `Factory.Worker` process; the API only admits (202) and reads status.
@@ -225,6 +225,23 @@ User-approved design; M7.1 implemented as a local candidate. See [Durable Workfl
   within a fixed attempt bound. Nothing is described as exactly-once.
 - Phases M7.1 (this), M7.2 (waiting, parallel steps, cancellation), M7.3 (real-time push), each
   stopping for review.
+
+## Milestone 7.2 scope (2026-10-15)
+
+Decided under the user's full approval for M7.2; reversible on request.
+
+- **Implemented:** durable waiting for human decisions (no lease, no timeout, `stop` always
+  offered) and run cancellation, as an additive migration on top of released M7.1.
+- **Deferred to M8: parallel steps.** The only workflow (Analysis → Architecture → Publication)
+  is strictly sequential, and the producer of independent parts is M8's request decomposition and
+  model routing. Building DAG scheduling now would require an invented test-only plan and
+  speculative abstractions (AGENTS.md rule 6). The M7 "independent parts run in parallel"
+  acceptance criterion therefore moves to M8, which must add step dependencies and allow more
+  than one running attempt per run.
+- **Interim decider authority:** active Human project Reviewers decide until M8 defines tenant
+  administrator/project owner roles. Service identities can never decide.
+- **No production decision producer yet:** the waiting path is infrastructure for M8 customer-model
+  decisions; it is tested through the worker port rather than triggered by current steps.
 
 ## Domain-Driven Design (2026-10-15, user direction)
 

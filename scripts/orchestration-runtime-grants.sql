@@ -17,8 +17,10 @@ REVOKE ALL ON ALL FUNCTIONS IN SCHEMA orchestration FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA orchestration FROM PUBLIC, factory_lifecycle_runtime, factory_orchestration_worker;
 REVOKE ALL ON ALL TABLES IN SCHEMA review, access, lifecycle FROM factory_orchestration_worker;
 GRANT USAGE ON SCHEMA orchestration TO factory_lifecycle_runtime, factory_orchestration_worker, factory_lifecycle_guard;
-GRANT SELECT, INSERT ON orchestration."WorkflowRuns", orchestration."WorkflowSteps", orchestration."StepAttempts" TO factory_lifecycle_guard;
-GRANT UPDATE ("Status","FailureCode","WorkItemId","UpdatedAt") ON orchestration."WorkflowRuns" TO factory_lifecycle_guard;
+GRANT SELECT, INSERT ON orchestration."WorkflowRuns", orchestration."WorkflowSteps", orchestration."StepAttempts",
+    orchestration."StepDecisions" TO factory_lifecycle_guard;
+GRANT UPDATE ("Status","FailureCode","WorkItemId","UpdatedAt","CancelledBy","CancelledAt") ON orchestration."WorkflowRuns" TO factory_lifecycle_guard;
+GRANT UPDATE ("Status","Choice","DecidedBy","DecidedAt") ON orchestration."StepDecisions" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Attempts","Output") ON orchestration."WorkflowSteps" TO factory_lifecycle_guard;
 GRANT UPDATE ("Outcome","FailureCode","FinishedAt","LeaseExpiresAt") ON orchestration."StepAttempts" TO factory_lifecycle_guard;
 -- The guard owns the functions so managed publication passes the M6 case-mode guard.
@@ -31,10 +33,11 @@ END $$;
 REVOKE CREATE ON SCHEMA orchestration FROM factory_lifecycle_guard;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA orchestration FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION orchestration.submit(text,text,text,text,uuid,text,jsonb),
-    orchestration.read_run(text,text,text,text,uuid) TO factory_lifecycle_runtime;
+    orchestration.read_run(text,text,text,text,uuid), orchestration.cancel(text,text,text,text,uuid),
+    orchestration.decide(text,text,text,text,uuid,uuid,text) TO factory_lifecycle_runtime;
 GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(uuid,bytea),
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
-    orchestration.publish(uuid,bytea,bytea) TO factory_orchestration_worker;
+    orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

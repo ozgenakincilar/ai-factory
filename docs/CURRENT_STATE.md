@@ -11,10 +11,19 @@ verification are authoritative. M6 is committed on `master` as
 `1b93fc4e0f82e942d82be1ba1372d496961eb0cb`; on 2026-10-15 `git ls-remote` showed origin master
 at that commit, and the user confirmed the commit/push was authorized. M5B.2 remains
 committed/pushed as e1bced7. M7 (Durable Workflow Orchestration) was approved on 2026-10-15;
-M7.1 is implemented as an uncommitted local candidate on top of `aa14450` (see below). M7.2/M7.3
-are not started. Future commits and pushes require explicit approval.
+M7.1 is committed and pushed as `bcd50fa`. M7.2 (human-decision waiting, cancellation) was
+implemented under the user's full approval; parallel steps moved to M8; M7.3 (real-time push) is
+not started. Future commits and pushes require explicit approval.
 
-## Milestone 7.1 current handoff
+## Milestone 7.2 current handoff
+
+Additive migration for waiting/decisions and cancellation; decide/cancel HTTP routes; interim
+Human-Reviewer decider authority. Executed 2026-10-15 (SDK 10.0.103, no live LLM calls): upgrade
+of the M7.1 database holding live-run data; fresh initialization; build **0 warnings/errors**;
+full suite **745 passed, 0 failed, 0 skipped** including four live Keycloak cases. No production
+step requests decisions yet. See [Durable Workflows](DURABLE_WORKFLOWS.md#milestone-72--waiting-for-human-decisions-and-cancellation).
+
+## Milestone 7.1 handoff (committed as bcd50fa)
 
 Asynchronous, durable Analyst → Architect → Publication runs executed by a separate
 `Factory.Worker` process with PostgreSQL leases and checkpoints; the API returns 202 and status.
@@ -24,7 +33,7 @@ An initial migration parse error was found and fixed before that run. A user-app
 then ran the worker as a real process with `gpt-4o-mini`: two runs succeeded, and a third survived
 a forced worker kill during Architecture, resuming on a new worker without repeating Analysis
 (about seven model calls; cost not measured). See [Durable Workflows](DURABLE_WORKFLOWS.md) for
-contracts, evidence and limits. Stop for review; no commit or M7.2 work is authorized yet.
+contracts, evidence and limits.
 
 ## Milestone 6 current handoff
 
@@ -185,7 +194,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 5B.1 | Committed/pushed JWT authentication and project authorization; see AUTHENTICATION.md |
 | 5B.2 | Committed/pushed secure human approval transactions, e1bced7; see HUMAN_DECISIONS.md |
 | 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer verified 2026-10-15 (700 passed), see PRODUCT_LIFECYCLE.md |
-| 7.1 | Uncommitted local candidate: durable runs, separate worker, leases/checkpoints (734 passed), see DURABLE_WORKFLOWS.md |
+| 7.1 | Committed/pushed durable runs, separate worker, leases/checkpoints, bcd50fa (734 passed; live worker checks), see DURABLE_WORKFLOWS.md |
+| 7.2 | Human-decision waiting and cancellation (745 passed); parallel steps moved to M8, see DURABLE_WORKFLOWS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

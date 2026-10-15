@@ -31,6 +31,23 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
     public Task<RunView> GetRunAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default)
         => Read<RunView>("read_run", actor, projectId, ct, P("run", runId));
 
+    public Task<RunView> CancelAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default)
+        => Read<RunView>("cancel", actor, projectId, ct, P("run", runId));
+
+    public Task<RunView> DecideAsync(TrustedIdentity actor, string projectId, Guid runId, Guid decisionId, string choice, CancellationToken ct = default)
+    {
+        if (!DecisionCodes.IsCode(choice)) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        return Read<RunView>("decide", actor, projectId, ct, P("run", runId), P("decision", decisionId), P("choice", choice));
+    }
+
+    public async Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default)
+    {
+        if (!DecisionCodes.IsCode(reason) || !DecisionCodes.AreValidOptions(options)) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        var id = await Call("SELECT orchestration.request_decision(@attempt,@token,@reason,@options)::text", ct,
+            P("attempt", attemptId), P("token", leaseToken), P("reason", reason), P("options", options.ToArray(), NpgsqlDbType.Array | NpgsqlDbType.Text));
+        return Guid.TryParse(id, out var decision) ? decision : throw new OrchestrationException(OrchestrationError.Integrity);
+    }
+
     public async Task<ClaimedStep?> ClaimAsync(string workerId, byte[] leaseToken, CancellationToken ct = default)
     {
         var json = await Call("SELECT orchestration.claim(@worker,@token)::text", ct, P("worker", workerId), P("token", leaseToken));
@@ -51,7 +68,7 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
                 architecture = b.Deserialize<ArchitectureProposal>(ArchitectureJson.Options);
                 if (!ArchitectureValidator.IsValid(architecture, Agent(request, analysis))) throw new OrchestrationException(OrchestrationError.Integrity);
             }
-            return new ClaimedStep(raw.RunId, raw.AttemptId, raw.Ordinal, raw.Kind, raw.CaseId, request, raw.Steps, analysis, architecture);
+            return new ClaimedStep(raw.RunId, raw.AttemptId, raw.Ordinal, raw.Kind, raw.CaseId, request, raw.Steps, analysis, architecture, raw.Decisions);
         }
         catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
     }
@@ -157,5 +174,5 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
     }
 
     private sealed record RawClaim(Guid RunId, Guid AttemptId, int Ordinal, StepKind Kind, Guid CaseId, JsonElement Request,
-        IReadOnlyList<WorkflowStep> Steps, JsonElement? Analysis, JsonElement? Architecture);
+        IReadOnlyList<WorkflowStep> Steps, JsonElement? Analysis, JsonElement? Architecture, IReadOnlyList<StepDecision>? Decisions);
 }

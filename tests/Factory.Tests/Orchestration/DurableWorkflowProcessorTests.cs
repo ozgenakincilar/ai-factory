@@ -157,6 +157,8 @@ public class DurableWorkflowProcessorTests
             if (LoseLeaseAfterRenewals is not null && Renewals >= LoseLeaseAfterRenewals) throw new OrchestrationException(OrchestrationError.LeaseLost);
             Failure = failureCode; return Task.CompletedTask;
         }
+        public Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default)
+            => throw new NotSupportedException("No M7.2 step requests decisions; M8 model routing will.");
         public Task<RunPublication> PublishAsync(ClaimedStep step, byte[] leaseToken, CancellationToken ct = default)
             => PublishError is { } error ? throw new OrchestrationException(error)
                 : Task.FromResult(new RunPublication(Guid.NewGuid(), step.CaseId, 1, new string('a', 64)));

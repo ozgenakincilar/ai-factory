@@ -41,8 +41,10 @@ version/hash. Human approval must not automatically execute any Developer Agent.
 
 ## M7 — Durable Workflow Orchestration
 
-Status: design approved 2026-10-15; **M7.1 implemented as an uncommitted local candidate**
-(see [Durable Workflows](DURABLE_WORKFLOWS.md)); M7.2 and M7.3 not started. Priority: **P0**.
+Status: design approved 2026-10-15; **M7.1 committed (`bcd50fa`)**; **M7.2 implemented**
+(waiting for human decisions, cancellation); parallel steps moved to M8
+([decision](DECISIONS.md#milestone-72-scope-2026-10-15)); M7.3 (real-time push) not started.
+See [Durable Workflows](DURABLE_WORKFLOWS.md). Priority: **P0**.
 Original estimate: **2–3 weeks**; the added asynchronous requirements below likely exceed it.
 
 Goal: Make long-running workflows independent from individual HTTP requests and API process lifetimes.
@@ -74,7 +76,7 @@ Asynchronous execution requirements (user-approved, 2026-10-15; not designed or 
 
 Acceptance criteria: A workflow survives worker restart without unnecessarily repeating completed
 steps. External LLM calls must not be falsely described as exactly-once. Independent parts run in
-parallel, a step can wait for a customer decision across worker restarts without consuming worker
+parallel (moved to M8 on 2026-10-15), a step can wait for a customer decision across worker restarts without consuming worker
 capacity, and connected clients receive state changes without polling.
 
 ## M8 — Tenant Isolation & AI Cost Controls
@@ -92,6 +94,8 @@ Tasks:
 - Track estimated and actual usage costs separately.
 - Add workflow budgets, reservations, limits and quotas.
 - Add initial cost-aware routing policies.
+- Run independent decomposed parts in parallel: step dependencies and more than one running
+  attempt per run (moved from M7; see [decision](DECISIONS.md#milestone-72-scope-2026-10-15)).
 - Support customer-provided models: customer API keys (BYOK) and customer-hosted model endpoints.
 - Preserve provider-neutral model interfaces.
 

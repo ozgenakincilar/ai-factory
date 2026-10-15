@@ -65,6 +65,53 @@ public class WorkflowRunTests
     }
 
     [Fact]
+    public void SuspendedStepWaitsWithoutConsumingTheLostLeaseBoundAndResumes()
+    {
+        var run = New(); run.Start(0);
+        run.Suspend(0);
+        Assert.Equal((RunStatus.Waiting, StepStatus.Waiting), (run.Status, run.Steps[0].Status));
+        Assert.Null(run.NextRunnable());
+        run.Resume(0); run.Start(0); run.Suspend(0); run.Resume(0); run.Start(0);
+        Assert.Equal((3, 0), (run.Steps[0].Attempts, run.Steps[0].Abandoned));
+        run.Abandon(0);
+        Assert.Equal((StepStatus.Pending, 1), (run.Steps[0].Status, run.Steps[0].Abandoned));
+        Assert.Throws<OrchestrationException>(() => run.Resume(0));
+    }
+
+    [Fact]
+    public void PublicationCannotWaitForADecision()
+    {
+        var run = New(); run.Start(0); run.Succeed(0); run.Start(1); run.Succeed(1); run.Start(2);
+        Assert.Equal(OrchestrationError.InvalidCommand, Assert.Throws<OrchestrationException>(() => run.Suspend(2)).Error);
+    }
+
+    [Fact]
+    public void CancelStopsQueuedRunningOrWaitingRunsAndIsIdempotent()
+    {
+        foreach (var prepare in new Action<WorkflowRun>[] { _ => { }, r => r.Start(0), r => { r.Start(0); r.Suspend(0); } })
+        {
+            var run = New(); prepare(run);
+            run.Cancel(); run.Cancel();
+            Assert.Equal(RunStatus.Cancelled, run.Status); Assert.True(run.IsTerminal);
+            Assert.All(run.Steps, s => Assert.Equal(StepStatus.Cancelled, s.Status));
+            Assert.Throws<OrchestrationException>(() => run.Start(0));
+        }
+        var finished = New(); finished.Start(0); finished.Fail(0, "invalid_output");
+        Assert.Equal(OrchestrationError.Conflict, Assert.Throws<OrchestrationException>(finished.Cancel).Error);
+    }
+
+    [Fact]
+    public void DecisionCodesRequireStaticCodesAndStop()
+    {
+        Assert.True(DecisionCodes.AreValidOptions(["use_factory_model", "stop"]));
+        Assert.False(DecisionCodes.AreValidOptions(["use_factory_model", "retry_later"]));
+        Assert.False(DecisionCodes.AreValidOptions(["stop"]));
+        Assert.False(DecisionCodes.AreValidOptions(["stop", "stop"]));
+        Assert.False(DecisionCodes.AreValidOptions(["stop", "Use Factory"]));
+        Assert.False(DecisionCodes.IsCode("x; DROP"));
+    }
+
+    [Fact]
     public void RestoreRejectsInconsistentStateAndUnknownVersions()
     {
         var id = Guid.NewGuid();

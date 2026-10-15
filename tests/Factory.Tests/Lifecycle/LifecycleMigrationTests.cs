@@ -43,8 +43,8 @@ public class LifecycleMigrationTests
         var before = await Audit();
         await migrator.MigrateAsync();
         Assert.False(db.Database.HasPendingModelChanges());
-        // M6 plus the additive M7.1 DurableWorkflows migration.
-        Assert.Equal(6,(await db.Database.GetAppliedMigrationsAsync()).Count());
+        // M6 plus the additive M7.1 DurableWorkflows and M7.2 DurableWorkflowDecisions migrations.
+        Assert.Equal(7,(await db.Database.GetAppliedMigrationsAsync()).Count());
         Assert.Equal(before,await Audit());
         Assert.Equal(artifact.GetContent(),(await publisher.GetArtifactAsync(review.ProjectId,review.Id,1))!.GetContent());
         Assert.Equal("Legacy",await db.Database.SqlQueryRaw<string>("""SELECT "ManagementMode" AS "Value" FROM review."ReviewCases" LIMIT 1""").SingleAsync());

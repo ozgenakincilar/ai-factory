@@ -29,6 +29,36 @@ public static class DurableWorkflowEndpoints
             }));
         group.MapGet("/{runId:guid}", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.GetRunAsync(actor, projectId, runId, http.RequestAborted))));
+        group.MapPost("/{runId:guid}/cancel", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.CancelAsync(actor, projectId, runId, http.RequestAborted))));
+        group.MapPost("/{runId:guid}/decisions/{decisionId:guid}", (string projectId, Guid runId, Guid decisionId, HttpContext http,
+            IWorkflowRunStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.DecideAsync(actor, projectId, runId, decisionId,
+                await ReadChoice(http), http.RequestAborted))));
+    }
+
+    // Strict body: exactly {"choice": "<code>"}, at most 1 KiB.
+    private static async Task<string> ReadChoice(HttpContext http)
+    {
+        if (!http.Request.HasJsonContentType()) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        var buffer = new byte[1025]; var length = 0;
+        while (length < buffer.Length)
+        {
+            var count = await http.Request.Body.ReadAsync(buffer.AsMemory(length), http.RequestAborted);
+            if (count == 0) break; length += count;
+        }
+        if (length > 1024) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(buffer.AsMemory(0, length), new System.Text.Json.JsonDocumentOptions { MaxDepth = 2 });
+            var fields = document.RootElement.EnumerateObject().ToArray();
+            if (fields.Length != 1 || fields[0].Name != "choice" || fields[0].Value.ValueKind != System.Text.Json.JsonValueKind.String ||
+                !DecisionCodes.IsCode(fields[0].Value.GetString()))
+                throw new OrchestrationException(OrchestrationError.InvalidCommand);
+            return fields[0].Value.GetString()!;
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
+        { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
     }
 
     private static async Task<IResult> Run(HttpContext http, FactoryAuthSettings settings, Func<TrustedIdentity, Task<IResult>> execute)
