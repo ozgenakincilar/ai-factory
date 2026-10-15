@@ -54,8 +54,26 @@ Tasks:
 - Support worker restart and crash recovery.
 - Add status/history endpoints and concurrency tests.
 
+Asynchronous execution requirements (user-approved, 2026-10-15; not designed or implemented):
+
+- Generation requests are accepted and return immediately with a run identity; work continues
+  in background workers, not inside the HTTP request. The M6 synchronous path is not extended.
+- Independent parts of a decomposed request (see model routing under M8) can run in parallel,
+  each as its own step with its own attempts, model selection and evidence. Dependencies between
+  parts are explicit; a part starts only when its inputs are complete and approved where required.
+- A step can enter a durable waiting state for a customer decision (see the decision popup under
+  M8) and wait indefinitely without an open request, without a timeout, and without holding
+  worker execution capacity. It resumes from its checkpoint when the decision is recorded.
+- Workflow and decision state changes are pushed to connected Product Workspace clients in real
+  time (for example via SignalR) so pending-decision popups appear while the application is open.
+  Pushed messages are notifications only; clients re-read authoritative state from the server.
+- Parallel steps never modify the same aggregate concurrently without the aggregate's own
+  concurrency control (DDD rule). Human approval gates apply to asynchronous steps unchanged.
+
 Acceptance criteria: A workflow survives worker restart without unnecessarily repeating completed
-steps. External LLM calls must not be falsely described as exactly-once.
+steps. External LLM calls must not be falsely described as exactly-once. Independent parts run in
+parallel, a step can wait for a customer decision across worker restarts without consuming worker
+capacity, and connected clients receive state changes without polling.
 
 ## M8 — Tenant Isolation & AI Cost Controls
 
