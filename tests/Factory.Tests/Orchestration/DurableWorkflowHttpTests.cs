@@ -35,7 +35,11 @@ public class DurableWorkflowHttpTests
         Assert.Equal(HttpStatusCode.OK, status.StatusCode);
         var text = await status.Content.ReadAsStringAsync();
         // Status is safe metadata: no task, context, model output or lease material.
-        Assert.DoesNotContain(ReviewSamples.Request.Task, text); Assert.DoesNotContain("token", text, StringComparison.OrdinalIgnoreCase);
+        // Usage counters (inputTokens/outputTokens) are expected; lease material is not.
+        Assert.DoesNotContain(ReviewSamples.Request.Task, text);
+        Assert.DoesNotContain("tokenhash", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("leasetoken", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("attemptId", text, StringComparison.OrdinalIgnoreCase);
         using var view = JsonDocument.Parse(text);
         Assert.Equal("queued", view.RootElement.GetProperty("status").GetString());
         Assert.All(view.RootElement.GetProperty("steps").EnumerateArray(), s => Assert.Equal("pending", s.GetProperty("status").GetString()));
@@ -95,6 +99,22 @@ public class DurableWorkflowHttpTests
         }
         using (var anonymous = factory.CreateClient()) using (var response = await anonymous.PostAsync($"/api/projects/{f.Project}/runs/{run.RunId:D}/cancel", null))
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [OrchestrationFact]
+    public async Task UsageEndpointReturnsTotalsAndRejectsInvalidRanges()
+    {
+        await using var f = await LifecycleFixture.Create(); using var factory = Factory(); using var client = Client(factory, f);
+        using (var usage = await client.GetAsync($"/api/projects/{f.Project}/usage"))
+        {
+            Assert.Equal(HttpStatusCode.OK, usage.StatusCode);
+            using var json = JsonDocument.Parse(await usage.Content.ReadAsStringAsync());
+            Assert.Equal(0, json.RootElement.GetProperty("totals").GetProperty("calls").GetInt32());
+            Assert.Equal(f.Project, json.RootElement.GetProperty("projectId").GetString());
+        }
+        using (var inverted = await client.GetAsync($"/api/projects/{f.Project}/usage?from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z"))
+            Assert.Equal(HttpStatusCode.BadRequest, inverted.StatusCode);
+        using (var denied = await client.GetAsync("/api/projects/another-project/usage")) Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
     }
 
     private static WebApplicationFactory<Program> Factory()

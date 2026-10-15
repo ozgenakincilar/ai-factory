@@ -255,6 +255,19 @@ Decided under the user's full approval for M7.2; reversible on request.
 - Test client pinned to `Microsoft.AspNetCore.SignalR.Client` 10.0.13 after the restore reported
   GHSA-334f-vvp4-7g6p in 10.0.12; deployments must use a patched ASP.NET Core runtime.
 
+## Milestone 8 plan (2026-10-15, user-approved)
+
+- Phases, each verified and reviewed: M8.1 usage metering → M8.2 tenancy (Organization → Project,
+  Owner/Admin) → M8.3 budgets and reservations → M8.4 customer-provided models → M8.5 request
+  decomposition, model routing and parallel steps. The original 2–3 week estimate no longer holds.
+- Customer credentials: an `ISecretStore` abstraction; local implementation encrypts with AES-GCM
+  in PostgreSQL using a master key from configuration; an Azure Key Vault implementation follows
+  with M13A. Credentials never enter prompts, logs, artifacts or agent tools.
+- Decomposition plans (parts, complexity/importance classification and selected models) require
+  human approval through the decision popup before any part executes.
+- Usage first: token counts come from provider responses; estimated cost uses an operator-maintained,
+  versioned price table. The Factory never invents prices; unpriced usage is reported as such.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

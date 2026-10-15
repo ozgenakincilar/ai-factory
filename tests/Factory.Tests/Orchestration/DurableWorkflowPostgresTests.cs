@@ -65,15 +65,19 @@ internal static class Durable
     internal sealed class Provider : IModelProvider
     {
         internal int Analysis, Architecture; internal string? AnalysisContent;
+        internal ModelUsage? AnalysisUsage, ArchitectureUsage; internal bool FailArchitecture;
         public Task<ModelResponse> GenerateAsync(ModelRequest request, CancellationToken ct = default)
         {
             if (request.OutputSchema!.Name == "analysis_result")
             {
                 Interlocked.Increment(ref Analysis);
-                return Task.FromResult(new ModelResponse(AnalysisContent ?? JsonSerializer.Serialize(ReviewSamples.Result.Analysis, AnalysisJson.Options), "test"));
+                return Task.FromResult(new ModelResponse(AnalysisContent ?? JsonSerializer.Serialize(ReviewSamples.Result.Analysis, AnalysisJson.Options), "test",
+                    Usage: AnalysisUsage));
             }
             Interlocked.Increment(ref Architecture);
-            return Task.FromResult(new ModelResponse(JsonSerializer.Serialize(ReviewSamples.Result.Architecture, ArchitectureJson.Options), "test"));
+            if (FailArchitecture) throw new InvalidOperationException("synthetic provider failure");
+            return Task.FromResult(new ModelResponse(JsonSerializer.Serialize(ReviewSamples.Result.Architecture, ArchitectureJson.Options), "test",
+                Usage: ArchitectureUsage));
         }
     }
 }

@@ -11,11 +11,19 @@ verification are authoritative. M6 is committed on `master` as
 `1b93fc4e0f82e942d82be1ba1372d496961eb0cb`; on 2026-10-15 `git ls-remote` showed origin master
 at that commit, and the user confirmed the commit/push was authorized. M5B.2 remains
 committed/pushed as e1bced7. M7 (Durable Workflow Orchestration) was approved on 2026-10-15;
-M7.1 is committed and pushed as `bcd50fa`, M7.2 as `9cee79c`. M7.3 (real-time run change
-notifications) was implemented under the user's full approval; parallel steps moved to M8. M8 is
-the next planned milestone and is not authorized. Future commits and pushes require explicit approval.
+M7.1 is committed and pushed as `bcd50fa`, M7.2 as `9cee79c`, M7.3 as `73f83ab`; parallel steps
+moved to M8. The M8 plan was approved on 2026-10-15; M8.1 (usage metering) is an uncommitted local
+candidate. Future commits and pushes require explicit approval.
 
-## Milestone 7.3 current handoff
+## Milestone 8.1 current handoff
+
+Per-call model usage recorded by the durable worker, priced from an operator-maintained append-only
+price table (empty by default; prices are never invented), exposed per run and per project.
+Executed 2026-10-15 (SDK 10.0.103, no live LLM calls): upgrade and fresh initialization; build
+**0 warnings/errors**; full suite **763 passed, 0 failed, 0 skipped** including four live Keycloak
+cases. The M6 synchronous route is not metered. See [Cost Controls](COST_CONTROLS.md).
+
+## Milestone 7.3 handoff (committed as 73f83ab)
 
 PostgreSQL commit-time `NOTIFY` relayed by the API to a JWT-authenticated SignalR hub
 (`/hubs/workflows`); clients watch a project and re-read state over HTTP. Executed 2026-10-15
@@ -205,7 +213,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer verified 2026-10-15 (700 passed), see PRODUCT_LIFECYCLE.md |
 | 7.1 | Committed/pushed durable runs, separate worker, leases/checkpoints, bcd50fa (734 passed; live worker checks), see DURABLE_WORKFLOWS.md |
 | 7.2 | Committed/pushed human-decision waiting and cancellation, 9cee79c (745 passed); parallel steps moved to M8, see DURABLE_WORKFLOWS.md |
-| 7.3 | Real-time run change notifications via PostgreSQL NOTIFY and SignalR (754 passed), see DURABLE_WORKFLOWS.md |
+| 7.3 | Committed/pushed real-time run change notifications via PostgreSQL NOTIFY and SignalR, 73f83ab (754 passed), see DURABLE_WORKFLOWS.md |
+| 8.1 | Uncommitted local candidate: per-call usage metering and operator prices (763 passed), see COST_CONTROLS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

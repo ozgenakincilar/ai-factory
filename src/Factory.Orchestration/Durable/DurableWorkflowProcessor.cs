@@ -39,6 +39,8 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
 
     private async Task<StepOutcome> ExecuteAsync(ClaimedStep step, byte[] token, CancellationTokenSource execution, CancellationToken stopping)
     {
+        // Every provider call of this attempt is metered, whatever its outcome.
+        var metered = new MeteredProvider(provider, call => Record(step.AttemptId, token, call));
         try
         {
             var request = new AgentRequest(step.Request.ProjectId, step.Request.Task, step.Request.Context,
@@ -46,14 +48,14 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
             switch (step.Kind)
             {
                 case StepKind.Analysis:
-                    var analysis = await new AnalystAgent(provider).ExecuteAsync(request, execution.Token);
+                    var analysis = await new AnalystAgent(metered).ExecuteAsync(request, execution.Token);
                     if (!analysis.Success) return await Fail(Code(analysis.FailureKind));
                     await queue.CompleteAnalysisAsync(step.AttemptId, token, analysis.Analysis!, CancellationToken.None);
                     return StepOutcome.Completed;
                 case StepKind.Architecture:
                     if (step.Analysis is null) throw new OrchestrationException(OrchestrationError.Integrity);
                     if (step.Analysis.FunctionalRequirements.Count == 0) return await Fail("no_requirements_for_architecture");
-                    var proposal = await new ArchitectAgent(provider).ExecuteAsync(request with { Analysis = step.Analysis }, execution.Token);
+                    var proposal = await new ArchitectAgent(metered).ExecuteAsync(request with { Analysis = step.Analysis }, execution.Token);
                     if (!proposal.Success) return await Fail(Code(proposal.FailureKind));
                     await queue.CompleteArchitectureAsync(step.AttemptId, token, proposal.Architecture!, CancellationToken.None);
                     return StepOutcome.Completed;
@@ -110,6 +112,42 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
             }
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+    }
+
+    // A failed usage write must not change the step outcome; it is an undercount, documented as such.
+    private async Task Record(Guid attempt, byte[] token, ModelCall call)
+    {
+        try { await queue.RecordModelCallAsync(attempt, token, call, CancellationToken.None); }
+        catch (OrchestrationException) { }
+    }
+
+    private sealed class MeteredProvider(IModelProvider inner, Func<ModelCall, Task> record) : IModelProvider
+    {
+        public async Task<ModelResponse> GenerateAsync(ModelRequest request, CancellationToken cancellationToken = default)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            int Elapsed() => (int)Math.Min(clock.ElapsedMilliseconds, 86_400_000);
+            ModelResponse response;
+            try { response = await inner.GenerateAsync(request, cancellationToken); }
+            catch (OperationCanceledException)
+            {
+                await record(new ModelCall(null, null, null, null, Elapsed(), ModelCallOutcome.Cancelled)); throw;
+            }
+            catch
+            {
+                await record(new ModelCall(null, null, null, null, Elapsed(), ModelCallOutcome.Failed)); throw;
+            }
+            var usage = response.Usage;
+            await record(new ModelCall(usage?.Provider, usage?.Model ?? response.Model, usage?.InputTokens, usage?.OutputTokens, Elapsed(),
+                response.Status switch
+                {
+                    ModelResponseStatus.Refused => ModelCallOutcome.Refused,
+                    ModelResponseStatus.Incomplete => ModelCallOutcome.Incomplete,
+                    ModelResponseStatus.Empty => ModelCallOutcome.Empty,
+                    _ => ModelCallOutcome.Completed
+                }));
+            return response;
+        }
     }
 
     private static string Code(AgentFailureKind? kind) => kind switch

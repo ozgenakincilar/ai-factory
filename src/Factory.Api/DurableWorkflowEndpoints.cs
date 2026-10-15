@@ -37,6 +37,14 @@ public static class DurableWorkflowEndpoints
             }));
         group.MapGet("/{runId:guid}", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.GetRunAsync(actor, projectId, runId, http.RequestAborted))));
+        // Project usage over [from, to); defaults to the last 30 days. Generator or Human Reviewer.
+        app.MapGet("/api/projects/{projectId}/usage", (string projectId, DateTimeOffset? from, DateTimeOffset? to, HttpContext http,
+            IWorkflowRunStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var end = to ?? DateTimeOffset.UtcNow; var start = from ?? end.AddDays(-30);
+                return Results.Json(await store.GetUsageAsync(actor, projectId, start, end, http.RequestAborted));
+            })).RequireAuthorization();
         group.MapPost("/{runId:guid}/cancel", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.CancelAsync(actor, projectId, runId, http.RequestAborted))));
         group.MapPost("/{runId:guid}/decisions/{decisionId:guid}", (string projectId, Guid runId, Guid decisionId, HttpContext http,

@@ -40,8 +40,21 @@ public static class DecisionCodes
 public sealed record RunSubmission(Guid RunId, RunStatus Status, bool Replayed);
 public sealed record RunPublication(Guid WorkItemId, Guid CaseId, int Version, string ContentHash);
 public sealed record StepDecision(Guid Id, int Ordinal, string Reason, IReadOnlyList<string> Options, DecisionStatus Status, string? Choice);
+
+public enum ModelCallOutcome { Completed, Refused, Incomplete, Empty, Failed, Cancelled }
+
+// One provider call as observed by the worker. Tokens are null when the provider reported none
+// (failed or cancelled calls may still be billed); they are never reported as zero instead.
+public sealed record ModelCall(string? Provider, string? Model, int? InputTokens, int? OutputTokens, int DurationMs, ModelCallOutcome Outcome);
+
+// Usage totals. EstimatedCostMicros (USD millionths) sums priced calls only; UnpricedCalls had
+// tokens but no operator price; UnknownUsageCalls had no provider-reported tokens.
+public sealed record UsageTotals(int Calls, long InputTokens, long OutputTokens, long EstimatedCostMicros, int UnpricedCalls, int UnknownUsageCalls);
+public sealed record ModelUsageTotal(string? Provider, string? Model, UsageTotals Totals);
+public sealed record ProjectUsage(string ProjectId, DateTimeOffset From, DateTimeOffset To, UsageTotals Totals, IReadOnlyList<ModelUsageTotal> Models);
+
 public sealed record RunView(Guid RunId, string ProjectId, RunStatus Status, string? FailureCode,
-    IReadOnlyList<WorkflowStep> Steps, RunPublication? Publication, IReadOnlyList<StepDecision>? Decisions = null);
+    IReadOnlyList<WorkflowStep> Steps, RunPublication? Publication, IReadOnlyList<StepDecision>? Decisions = null, UsageTotals? Usage = null);
 
 // One leased step. Prior checkpoints are revalidated by the store before they are returned.
 // Decisions are this step's earlier human decisions, so a resumed step can act on them.
@@ -60,6 +73,8 @@ public interface IWorkflowRunStore
     Task<RunView> DecideAsync(TrustedIdentity actor, string projectId, Guid runId, Guid decisionId, string choice, CancellationToken ct = default);
     // Same audience as GetRunAsync; throws Forbidden otherwise. Checked when a client starts watching.
     Task AuthorizeWatchAsync(TrustedIdentity actor, string projectId, CancellationToken ct = default);
+    // Same audience as GetRunAsync; half-open interval [from, to), at most 366 days.
+    Task<ProjectUsage> GetUsageAsync(TrustedIdentity actor, string projectId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default);
 }
 
 // A run changed and was committed. A hint only: clients re-read authoritative state.
@@ -73,6 +88,9 @@ public interface IStepQueue
     Task CompleteAnalysisAsync(Guid attemptId, byte[] leaseToken, AnalysisResult analysis, CancellationToken ct = default);
     Task CompleteArchitectureAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal architecture, CancellationToken ct = default);
     Task FailAsync(Guid attemptId, byte[] leaseToken, string failureCode, CancellationToken ct = default);
+    // Appends usage for one provider call of this attempt. Accepted even after the lease ended,
+    // because a call that returned late was still made; the token proves the caller owned it.
+    Task RecordModelCallAsync(Guid attemptId, byte[] leaseToken, ModelCall call, CancellationToken ct = default);
     // Ends the attempt and parks the step as Waiting until a human decides; releases worker capacity.
     Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default);
     // Atomically publishes the managed review case and completes the run.

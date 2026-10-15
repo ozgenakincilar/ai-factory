@@ -45,6 +45,16 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
             ? throw new OrchestrationException(OrchestrationError.Forbidden)
             : Read<bool>("authorize_watch", actor, projectId, ct);
 
+    public Task<ProjectUsage> GetUsageAsync(TrustedIdentity actor, string projectId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+        => Read<ProjectUsage>("read_usage", actor, projectId, ct,
+            P("from", from.ToUniversalTime(), NpgsqlDbType.TimestampTz), P("to", to.ToUniversalTime(), NpgsqlDbType.TimestampTz));
+
+    public Task RecordModelCallAsync(Guid attemptId, byte[] leaseToken, ModelCall call, CancellationToken ct = default)
+        => Call("SELECT orchestration.record_model_call(@attempt,@token,@provider,@model,@input,@output,@duration,@outcome)::text", ct,
+            P("attempt", attemptId), P("token", leaseToken), P("provider", call.Provider, NpgsqlDbType.Text), P("model", call.Model, NpgsqlDbType.Text),
+            P("input", call.InputTokens, NpgsqlDbType.Integer), P("output", call.OutputTokens, NpgsqlDbType.Integer),
+            P("duration", call.DurationMs), P("outcome", call.Outcome.ToString()));
+
     public async Task<Guid> RequestDecisionAsync(Guid attemptId, byte[] leaseToken, string reason, IReadOnlyList<string> options, CancellationToken ct = default)
     {
         if (!DecisionCodes.IsCode(reason) || !DecisionCodes.AreValidOptions(options)) throw new OrchestrationException(OrchestrationError.InvalidCommand);

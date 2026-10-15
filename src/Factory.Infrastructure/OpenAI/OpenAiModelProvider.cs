@@ -40,11 +40,17 @@ public sealed class OpenAiModelProvider : IModelProvider
                 options,
                 cancellationToken: cancellationToken);
 
+        // Every returned completion is billed, including refusals and partial output.
+        var usage = completion.Usage is { } reported
+            ? new ModelUsage("openai", string.IsNullOrWhiteSpace(completion.Model) ? _model : completion.Model,
+                reported.InputTokenCount, reported.OutputTokenCount)
+            : null;
+
         // Refusals and partial completions need not conform to the requested schema.
         if (!string.IsNullOrEmpty(completion.Refusal) || completion.FinishReason == ChatFinishReason.ContentFilter)
-            return new ModelResponse(string.Empty, _model, ModelResponseStatus.Refused);
+            return new ModelResponse(string.Empty, _model, ModelResponseStatus.Refused, usage);
         if (completion.FinishReason != ChatFinishReason.Stop)
-            return new ModelResponse(string.Empty, _model, ModelResponseStatus.Incomplete);
+            return new ModelResponse(string.Empty, _model, ModelResponseStatus.Incomplete, usage);
 
         string content = string.Join(
             "\n",
@@ -54,9 +60,9 @@ public sealed class OpenAiModelProvider : IModelProvider
 
         if (string.IsNullOrWhiteSpace(content))
         {
-            return new ModelResponse(string.Empty, _model, ModelResponseStatus.Empty);
+            return new ModelResponse(string.Empty, _model, ModelResponseStatus.Empty, usage);
         }
 
-        return new ModelResponse(content, _model);
+        return new ModelResponse(content, _model, Usage: usage);
     }
 }

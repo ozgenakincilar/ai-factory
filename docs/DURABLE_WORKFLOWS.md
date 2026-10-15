@@ -1,6 +1,6 @@
 # Milestone 7 — Durable Workflow Orchestration
 
-Status: M7.1 committed and pushed as `bcd50fa`; M7.2 as `9cee79c`. M7.2 (human-decision waiting and cancellation)
+Status: M7.1 committed and pushed as `bcd50fa`; M7.2 as `9cee79c`; M7.3 as `73f83ab`. M7.2 (human-decision waiting and cancellation)
 implemented and verified on 2026-10-15 under the user's full approval; see
 [M7.2](#milestone-72--waiting-for-human-decisions-and-cancellation). Parallel steps are deferred
 to M8 (see [Architectural Decisions](DECISIONS.md#milestone-72-scope-2026-10-15)). M7.3 (real-time
