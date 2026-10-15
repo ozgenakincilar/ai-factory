@@ -93,7 +93,7 @@ public class DurableWorkflowDecisionTests
     }
 
     [OrchestrationFact]
-    public async Task OnlyActiveHumanReviewersDecideAndOnlyOfferedChoices()
+    public async Task OnlyActiveOrganizationAdminsDecideAndOnlyOfferedChoices()
     {
         await Durable.Drain(); await using var f = await LifecycleFixture.Create(); await using var service = await LifecycleFixture.Create(PrincipalKind.Service);
         await using var other = await LifecycleFixture.Create();
@@ -106,9 +106,11 @@ public class DurableWorkflowDecisionTests
         Assert.Equal(OrchestrationError.Forbidden, await Decide(other.Actor));
         Assert.Equal(OrchestrationError.InvalidCommand, await Decide(f.Actor, "retry_later"));
         Assert.Equal(OrchestrationError.NotFound, await Decide(f.Actor, id: Guid.NewGuid()));
-        await f.Sql("""UPDATE access."ProjectMemberships" SET "IsActive"=false,"Revision"="Revision"+1 WHERE "ProjectId"=@p AND "Role"='Reviewer'""", new NpgsqlParameter("p", f.Project));
+        // Organization authority, not project roles, decides (M8.2).
+        await f.Sql("""UPDATE tenancy."OrganizationMemberships" SET "IsActive"=false,"Revision"="Revision"+1 WHERE "OrganizationId"=@o""", new NpgsqlParameter("o", f.Organization));
         Assert.Equal(OrchestrationError.Forbidden, await Decide(f.Actor));
-        await f.Sql("""UPDATE access."ProjectMemberships" SET "IsActive"=true,"Revision"="Revision"+1 WHERE "ProjectId"=@p AND "Role"='Reviewer'""", new NpgsqlParameter("p", f.Project));
+        await f.Sql("""UPDATE tenancy."OrganizationMemberships" SET "IsActive"=true,"Revision"="Revision"+1 WHERE "OrganizationId"=@o""", new NpgsqlParameter("o", f.Organization));
+        await f.Sql("""UPDATE access."ProjectMemberships" SET "IsActive"=false,"Revision"="Revision"+1 WHERE "ProjectId"=@p AND "Role"='Reviewer'""", new NpgsqlParameter("p", f.Project));
         Assert.Equal(RunStatus.Waiting, (await Durable.Api.GetRunAsync(f.Actor, f.Project, run.RunId)).Status);
         Assert.Equal(RunStatus.Cancelled, (await Durable.Api.CancelAsync(f.Actor, f.Project, run.RunId)).Status);
         Assert.Equal(DecisionStatus.Cancelled, (await Durable.Api.GetRunAsync(f.Actor, f.Project, run.RunId)).Decisions![0].Status);

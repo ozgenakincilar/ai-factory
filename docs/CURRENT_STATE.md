@@ -13,8 +13,10 @@ at that commit, and the user confirmed the commit/push was authorized. M5B.2 rem
 committed/pushed as e1bced7. M7 (Durable Workflow Orchestration) was approved on 2026-10-15;
 M7.1 is committed and pushed as `bcd50fa`, M7.2 as `9cee79c`, M7.3 as `73f83ab`; parallel steps
 moved to M8. The M8 plan was approved on 2026-10-15; M8.1 (usage metering) is committed and pushed as
-`7da963f`, with a versioned price script (`scripts/model-prices.sql`). Future commits and pushes
-require explicit approval.
+`7da963f`, with a versioned price script (`scripts/model-prices.sql`). M8.2 (tenancy: organizations,
+Owner/Admin roles, immutable project ownership, organization-admin decisions, organization usage)
+is an uncommitted local candidate verified with **767 passed, 0 failed, 0 skipped** including four
+live Keycloak cases. Future commits and pushes require explicit approval.
 
 ## Milestone 8.1 current handoff
 
@@ -216,6 +218,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 7.2 | Committed/pushed human-decision waiting and cancellation, 9cee79c (745 passed); parallel steps moved to M8, see DURABLE_WORKFLOWS.md |
 | 7.3 | Committed/pushed real-time run change notifications via PostgreSQL NOTIFY and SignalR, 73f83ab (754 passed), see DURABLE_WORKFLOWS.md |
 | 8.1 | Committed/pushed per-call usage metering and operator prices, 7da963f (763 passed; one live metered call), see COST_CONTROLS.md |
+| 8.2 | Uncommitted local candidate: tenancy, organization-admin decisions and organization usage (767 passed), see COST_CONTROLS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

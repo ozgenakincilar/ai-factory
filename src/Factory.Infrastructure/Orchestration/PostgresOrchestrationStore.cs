@@ -6,6 +6,7 @@ using Factory.Core.Architecture;
 using Factory.Core.Authorization;
 using Factory.Core.Lifecycle;
 using Factory.Core.Orchestration;
+using Factory.Core.Tenancy;
 using Factory.Core.Workflows;
 using Factory.Infrastructure.Reviews;
 using Npgsql;
@@ -15,8 +16,15 @@ namespace Factory.Infrastructure.Orchestration;
 
 // One instance per database role: the API uses the lifecycle runtime (submit/read only);
 // the worker uses the orchestration worker role (claim/renew/complete/fail/publish only).
-public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue
+public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore
 {
+    public Task<OrganizationUsage> GetOrganizationUsageAsync(TrustedIdentity actor, string organizationId, DateTimeOffset from, DateTimeOffset to,
+        CancellationToken ct = default)
+        => string.IsNullOrWhiteSpace(organizationId) || organizationId.Length > 210
+            ? throw new OrchestrationException(OrchestrationError.Forbidden)
+            : Read<OrganizationUsage>("read_usage", actor, organizationId, ct, "tenancy",
+                P("from", from.ToUniversalTime(), NpgsqlDbType.TimestampTz), P("to", to.ToUniversalTime(), NpgsqlDbType.TimestampTz));
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     public Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, CancellationToken ct = default)
@@ -119,12 +127,15 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
     private Task Complete(Guid attemptId, byte[] leaseToken, string output, CancellationToken ct)
         => Call("SELECT orchestration.complete(@attempt,@token,@output)::text", ct, P("attempt", attemptId), P("token", leaseToken), P("output", output, NpgsqlDbType.Jsonb));
 
-    private async Task<T> Read<T>(string function, TrustedIdentity actor, string projectId, CancellationToken ct, params NpgsqlParameter[] parameters)
+    private Task<T> Read<T>(string function, TrustedIdentity actor, string projectId, CancellationToken ct, params NpgsqlParameter[] parameters)
+        => Read<T>(function, actor, projectId, ct, "orchestration", parameters);
+
+    // scope is the project or organization id; schema and function names are internal constants.
+    private async Task<T> Read<T>(string function, TrustedIdentity actor, string scope, CancellationToken ct, string schema, params NpgsqlParameter[] parameters)
     {
-        // Function and parameter names are internal constants, never caller supplied.
-        var names = new[] { "project", "issuer", "subject", "kind" }.Concat(parameters.Select(p => p.ParameterName));
-        var all = new[] { P("project", projectId), P("issuer", actor.Issuer), P("subject", actor.Subject), P("kind", actor.Kind.ToString()) }.Concat(parameters).ToArray();
-        var json = await Call($"SELECT orchestration.{function}({string.Join(',', names.Select(n => '@' + n))})::text", ct, all);
+        var names = new[] { "scope", "issuer", "subject", "kind" }.Concat(parameters.Select(p => p.ParameterName));
+        var all = new[] { P("scope", scope), P("issuer", actor.Issuer), P("subject", actor.Subject), P("kind", actor.Kind.ToString()) }.Concat(parameters).ToArray();
+        var json = await Call($"SELECT {schema}.{function}({string.Join(',', names.Select(n => '@' + n))})::text", ct, all);
         try { return JsonSerializer.Deserialize<T>(json ?? "null", Json) ?? throw new OrchestrationException(OrchestrationError.Integrity); }
         catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
     }

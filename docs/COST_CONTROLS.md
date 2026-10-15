@@ -1,8 +1,9 @@
 # Milestone 8 — Tenant Isolation & AI Cost Controls
 
 Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#milestone-8-plan-2026-10-15-user-approved)).
-**M8.1 usage metering committed and pushed as `7da963f`.** M8.2 tenancy, M8.3 budgets,
-M8.4 customer-provided models and M8.5 decomposition/routing/parallel steps are not started.
+**M8.1 usage metering committed and pushed as `7da963f`. M8.2 tenancy implemented as an
+uncommitted local candidate** ([M8.2](#m82--tenancy)). M8.3 budgets, M8.4 customer-provided models
+and M8.5 decomposition/routing/parallel steps are not started.
 This document describes inspected code and executed local verification, not production readiness.
 
 ## M8.1 — Usage metering
@@ -84,3 +85,57 @@ separation and append-only tables.
   time. The run itself failed `invalid_output` (model output did not pass Analyst validation) and
   was not retried, by design. One sample shows the path works; it is not a reliability measure.
 - USD only; no tenant attribution until M8.2.
+
+## M8.2 — Tenancy
+
+Additive migration `20261016020000_Tenancy` (embedded `Tenancy.sql`) and
+`scripts/tenancy-runtime-grants.sql` (run by the initializer after the orchestration grants).
+Access tables and their EF model are unchanged.
+
+- **Model (Tenancy bounded context).** `tenancy."Organizations"`; `OrganizationMemberships` with
+  roles `Owner`/`Admin`, human only (composite foreign key to the principal's id and kind, kind
+  fixed to `Human`); `ProjectOwnership`, one organization per project, immutable (no update or
+  delete, even for the owner login). A deferred constraint trigger rejects any new
+  `access."Projects"` row without ownership at COMMIT.
+- **Backfill.** Each pre-existing project gets its own `legacy-<projectId>` organization, so no two
+  existing projects are merged into one tenant. Active Human project Reviewers become Admins of
+  their project's legacy organization, preserving who could decide waiting steps. On the local
+  live-data database: 137 projects, 137 owned, 132 Admin memberships after upgrade.
+- **Decision authority.** `orchestration.decide` now requires an active Human Owner/Admin of the
+  project's organization (`tenancy.lock_project_admin`, locked against concurrent revocation),
+  replacing the M7.2 interim project-Reviewer authority. A project role is neither required nor
+  sufficient; Service identities are always refused.
+- **Organization usage.** `GET /api/organizations/{organizationId}/usage?from=&to=` (Owner/Admin
+  only; same range rules as project usage) totals usage across the organization's projects with
+  per-project and per-model breakdowns. Executable by the API runtime only.
+- **Least privilege.** Tenancy tables are operator-managed with the owner login; the API runtime
+  and worker roles cannot read or write them, and the worker cannot call tenancy functions.
+
+### Executed verification — 2026-10-15
+
+SDK 10.0.103, uncommitted working tree on top of `d2e16f4`; no live LLM calls.
+
+1. Migration replayed inside `BEGIN … ROLLBACK` on the M8.1 database, then applied by the
+   initializer to it and to the live-data M7 database (upgrade), plus fresh
+   `factory_m82_verify_20261016` and `-BaselineOnly` `factory_m82_verify_20261016_legacy`.
+2. Orchestration + lifecycle filter: 142 passed, 1 not executed (the Keycloak case).
+3. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **767 passed, 0 failed, 0 skipped** (763 existing + 4 new), including
+   four live Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-15_23_37_57.trx`,
+   SHA-256 `74019a8383670c8b0f926d844c509a724e5db607ac0707dc881fababf97deb5b`.
+4. Keycloak and PostgreSQL stopped; data preserved.
+
+New and changed cases cover ownership required at COMMIT and immutable; organization roles human
+only; a project Reviewer without an organization role and another tenant's Owner both refused,
+while an organization Admin without a project role decides; organization usage limited to its own
+projects and to Owner/Admin; tenancy tables and functions unreachable by runtime roles; and the
+migration backfill. The M7.2 decision test now revokes the organization role instead of the
+project Reviewer role, and the test fixture creates an owning organization for every project.
+
+### M8.2 limits
+
+- No API yet to create organizations, transfer membership or manage roles; operators use SQL.
+- Legacy organizations whose project had no active Human Reviewer have no Admin; an operator must
+  assign one before waiting decisions on those projects can be made.
+- Project reads still use project membership; organization Admins do not automatically read
+  project content.

@@ -69,7 +69,7 @@ public interface IWorkflowRunStore
     Task<RunView> GetRunAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
     // Generator; idempotent for an already cancelled run, Conflict for a finished run.
     Task<RunView> CancelAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
-    // Human project Reviewer (interim until M8 tenant roles); "stop" cancels the run.
+    // Active Human Owner/Admin of the project's organization (M8.2); "stop" cancels the run.
     Task<RunView> DecideAsync(TrustedIdentity actor, string projectId, Guid runId, Guid decisionId, string choice, CancellationToken ct = default);
     // Same audience as GetRunAsync; throws Forbidden otherwise. Checked when a client starts watching.
     Task AuthorizeWatchAsync(TrustedIdentity actor, string projectId, CancellationToken ct = default);

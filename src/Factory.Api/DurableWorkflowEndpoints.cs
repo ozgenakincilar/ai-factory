@@ -12,7 +12,9 @@ public static class DurableWorkflowEndpoints
     public static void AddDurableWorkflows(this WebApplicationBuilder builder)
     {
         var connection = builder.Configuration.GetConnectionString("Lifecycle") ?? "";
-        builder.Services.AddSingleton<IWorkflowRunStore>(new PostgresOrchestrationStore(connection));
+        var store = new PostgresOrchestrationStore(connection);
+        builder.Services.AddSingleton<IWorkflowRunStore>(store);
+        builder.Services.AddSingleton<Factory.Core.Tenancy.ITenantUsageStore>(store);
         builder.Services.AddSignalR();
         builder.Services.AddSingleton(new PostgresRunEventListener(connection));
         builder.Services.AddSingleton<WorkflowEventRelay>();
@@ -44,6 +46,14 @@ public static class DurableWorkflowEndpoints
             {
                 var end = to ?? DateTimeOffset.UtcNow; var start = from ?? end.AddDays(-30);
                 return Results.Json(await store.GetUsageAsync(actor, projectId, start, end, http.RequestAborted));
+            })).RequireAuthorization();
+        // Organization usage across its projects; Human Owner/Admin only.
+        app.MapGet("/api/organizations/{organizationId}/usage", (string organizationId, DateTimeOffset? from, DateTimeOffset? to, HttpContext http,
+            Factory.Core.Tenancy.ITenantUsageStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var end = to ?? DateTimeOffset.UtcNow; var start = from ?? end.AddDays(-30);
+                return Results.Json(await store.GetOrganizationUsageAsync(actor, organizationId, start, end, http.RequestAborted));
             })).RequireAuthorization();
         group.MapPost("/{runId:guid}/cancel", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.CancelAsync(actor, projectId, runId, http.RequestAborted))));

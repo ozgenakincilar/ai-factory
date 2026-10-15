@@ -36,6 +36,7 @@ internal sealed class LifecycleFixture : IAsyncDisposable
     internal static DbContextOptions<ReviewDbContext> Options(string connection) => new DbContextOptionsBuilder<ReviewDbContext>().UseNpgsql(connection).Options;
     internal PostgresLifecycleStore Store { get; } = new(Runtime);
     internal string Project { get; } = "m6-" + Guid.NewGuid().ToString("N");
+    internal string Organization { get; } = "org-" + Guid.NewGuid().ToString("N");
     internal TrustedIdentity Actor { get; private set; } = null!;
     internal Guid PrincipalId { get; private set; }
     internal byte[] Token { get; } = RandomNumberGenerator.GetBytes(32);
@@ -50,7 +51,19 @@ internal sealed class LifecycleFixture : IAsyncDisposable
         if (existing is null) db.Add(new PrincipalRow { Id = fixture.PrincipalId, Issuer = fixture.Actor.Issuer, Subject = fixture.Actor.Subject, Kind = kind, IsActive = true });
         db.Add(new ProjectMembershipRow { ProjectId = fixture.Project, PrincipalId = fixture.PrincipalId, PrincipalKind = kind, Role = ProjectRole.Generator, IsActive = true });
         if (kind == PrincipalKind.Human) db.Add(new ProjectMembershipRow { ProjectId = fixture.Project, PrincipalId = fixture.PrincipalId, PrincipalKind = kind, Role = ProjectRole.Reviewer, IsActive = true });
-        await db.SaveChangesAsync(); return fixture;
+        // M8.2: every project belongs to an organization at COMMIT; a Human fixture actor owns it.
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await db.SaveChangesAsync();
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO tenancy."Organizations" ("Id","Name","IsActive","Revision") VALUES ({0},'Test organization',true,1);
+            INSERT INTO tenancy."ProjectOwnership" ("ProjectId","OrganizationId") VALUES ({1},{0});
+            """, fixture.Organization, fixture.Project);
+        if (kind == PrincipalKind.Human)
+            await db.Database.ExecuteSqlRawAsync("""
+                INSERT INTO tenancy."OrganizationMemberships" ("OrganizationId","PrincipalId","PrincipalKind","Role","IsActive","Revision")
+                VALUES ({0},{1},'Human','Owner',true,1)
+                """, fixture.Organization, fixture.PrincipalId);
+        await tx.CommitAsync(); return fixture;
     }
     internal async Task<(GenerationCommand Command, GenerationAdmission Admission, GenerationOutcome Published)> Publish()
     {

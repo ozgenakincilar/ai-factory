@@ -25,6 +25,7 @@
     <EmbeddedResource Include="Reviews\Migrations\DurableWorkflowDecisions.sql" />
     <EmbeddedResource Include="Reviews\Migrations\DurableWorkflowEvents.sql" />
     <EmbeddedResource Include="Reviews\Migrations\UsageMetering.sql" />
+    <EmbeddedResource Include="Reviews\Migrations\Tenancy.sql" />
     <InternalsVisibleTo Include="Factory.Tests" />
   </ItemGroup>
 

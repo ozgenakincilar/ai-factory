@@ -115,6 +115,13 @@ public class DurableWorkflowHttpTests
         using (var inverted = await client.GetAsync($"/api/projects/{f.Project}/usage?from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z"))
             Assert.Equal(HttpStatusCode.BadRequest, inverted.StatusCode);
         using (var denied = await client.GetAsync("/api/projects/another-project/usage")) Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using (var organization = await client.GetAsync($"/api/organizations/{f.Organization}/usage"))
+        {
+            Assert.Equal(HttpStatusCode.OK, organization.StatusCode);
+            using var json = JsonDocument.Parse(await organization.Content.ReadAsStringAsync());
+            Assert.Equal(f.Organization, json.RootElement.GetProperty("organizationId").GetString());
+        }
+        using (var foreign = await client.GetAsync("/api/organizations/another-organization/usage")) Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
     }
 
     private static WebApplicationFactory<Program> Factory()
@@ -125,6 +132,7 @@ public class DurableWorkflowHttpTests
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IWorkflowRunStore>(); services.AddSingleton<IWorkflowRunStore>(Durable.Api);
+                services.RemoveAll<Factory.Core.Tenancy.ITenantUsageStore>(); services.AddSingleton<Factory.Core.Tenancy.ITenantUsageStore>(Durable.Api);
             });
         });
 

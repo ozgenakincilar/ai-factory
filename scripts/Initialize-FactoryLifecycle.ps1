@@ -51,7 +51,7 @@ try {
     & "$repo/artifacts/tools/dotnet-ef.exe" @migrationArgs
     if($LASTEXITCODE){throw 'Lifecycle migration failed.'}
     $grants=@('review-runtime-grants.sql','authorization-runtime-grants.sql','decision-runtime-grants.sql')
-    if(-not $BaselineOnly){$grants+=@('lifecycle-runtime-grants.sql','orchestration-runtime-grants.sql')}
+    if(-not $BaselineOnly){$grants+=@('lifecycle-runtime-grants.sql','orchestration-runtime-grants.sql','tenancy-runtime-grants.sql')}
     foreach($file in $grants){
         & $psql -h 127.0.0.1 -p $settings.Port -U factory_owner -d $Database -v ON_ERROR_STOP=1 -f "scripts/$file"
         if($LASTEXITCODE){throw 'Runtime grants failed.'}

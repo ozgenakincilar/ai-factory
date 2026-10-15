@@ -43,8 +43,16 @@ public class LifecycleMigrationTests
         var before = await Audit();
         await migrator.MigrateAsync();
         Assert.False(db.Database.HasPendingModelChanges());
-        // M6 plus the additive M7.1, M7.2, M7.3 and M8.1 migrations.
-        Assert.Equal(9,(await db.Database.GetAppliedMigrationsAsync()).Count());
+        // M6 plus the additive M7.1, M7.2, M7.3, M8.1 and M8.2 migrations.
+        Assert.Equal(10,(await db.Database.GetAppliedMigrationsAsync()).Count());
+        // M8.2 backfill: the pre-existing project got its own legacy organization, and its active
+        // Human Reviewer became an organization Admin (preserving decision authority).
+        Assert.Equal("legacy-"+review.ProjectId,await db.Database.SqlQueryRaw<string>("""
+            SELECT "OrganizationId" AS "Value" FROM tenancy."ProjectOwnership" WHERE "ProjectId"={0}
+            """,review.ProjectId).SingleAsync());
+        Assert.Equal("Admin",await db.Database.SqlQueryRaw<string>("""
+            SELECT "Role" AS "Value" FROM tenancy."OrganizationMemberships" WHERE "OrganizationId"={0} AND "PrincipalId"={1} AND "IsActive"
+            ""","legacy-"+review.ProjectId,principal.Id).SingleAsync());
         Assert.Equal(before,await Audit());
         Assert.Equal(artifact.GetContent(),(await publisher.GetArtifactAsync(review.ProjectId,review.Id,1))!.GetContent());
         Assert.Equal("Legacy",await db.Database.SqlQueryRaw<string>("""SELECT "ManagementMode" AS "Value" FROM review."ReviewCases" LIMIT 1""").SingleAsync());
@@ -52,7 +60,7 @@ public class LifecycleMigrationTests
         Assert.Equal(outcome.Snapshot,(await decisions.DecideAsync(actor,review.ProjectId,review.Id,command)).Snapshot);
         await Assert.ThrowsAsync<DbUpdateException>(()=>publisher.CreateAsync(ReviewSamples.Request,ReviewSamples.Result));
         // Restricted legacy writer can still publish an existing historical case after explicit grants.
-        foreach(var file in new[]{"review-runtime-grants.sql","authorization-runtime-grants.sql","decision-runtime-grants.sql","lifecycle-runtime-grants.sql","orchestration-runtime-grants.sql"})
+        foreach(var file in new[]{"review-runtime-grants.sql","authorization-runtime-grants.sql","decision-runtime-grants.sql","lifecycle-runtime-grants.sql","orchestration-runtime-grants.sql","tenancy-runtime-grants.sql"})
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(Root(),"scripts",file)));
         var writer = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("FACTORY_REVIEW_TEST_CONNECTION")) { Database=name };
         var restricted = new PostgresReviewStore(LifecycleFixture.Options(writer.ConnectionString));
