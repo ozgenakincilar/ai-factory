@@ -186,9 +186,9 @@ deployment approval must use its own verified plan/target binding; an existing r
 must never be treated as permission to apply infrastructure. No application contract, database
 schema or runtime behavior changes as part of this decision.
 
-## Milestone 6 lifecycle integration (2026-10-14, local candidate)
+## Milestone 6 lifecycle integration (2026-10-14, committed as 1b93fc4)
 
-Explicitly approved architecture, now implemented locally and awaiting review. See
+Explicitly approved architecture, implemented and committed as 1b93fc4. See
 [Product Lifecycle](PRODUCT_LIFECYCLE.md) for contracts, verification and limitations.
 
 - One managed ReviewCase per WorkItem; server-generated WorkItemId and RunId. RunId is the

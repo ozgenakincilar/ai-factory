@@ -1,8 +1,11 @@
 # Milestone 6 — Product Lifecycle & Review Integration
 
-Status: approved architecture, implemented **uncommitted local candidate** on master
-`ce9f8b078c8355dbf086c96fd3d0b7412b6495e4`. No commit, push or M7 implementation is authorized.
-This document describes inspected code and executed local verification, not production readiness.
+Status: approved architecture, **committed** on master as
+`1b93fc4e0f82e942d82be1ba1372d496961eb0cb` (parent `ce9f8b0`). On 2026-10-15 `git ls-remote`
+showed origin master at 1b93fc4; the user confirmed the commit/push was authorized. No M7
+implementation is authorized. This document describes inspected code and executed local
+verification, not production readiness. Sections below written before the commit are historical;
+see [evidence levels](#evidence-levels-after-commit) for what the evidence covers.
 
 ## Identity, publication and compatibility
 
@@ -152,7 +155,7 @@ The audit finding was reproduced in `factory_m6_final` with a rollback-only priv
 a later artifact/event/Published command without case advancement passed SET CONSTRAINTS ALL
 IMMEDIATE. The transaction was rolled back; no preserved schema or data was changed.
 
-The corrected uncommitted migration checks the newly Published command transition independently
+The corrected migration (uncommitted at the time, now part of 1b93fc4) checks the newly Published command transition independently
 of ReviewCases updates, binding case/project/lineage, version/hash, RunId, expected/resulting
 revision and PendingReview state. Published ResultRevision must explicitly be non-null. Historical
 published commands are not incorrectly compared against later case states. Existing decision and
@@ -215,8 +218,8 @@ after the full suite. Raw SQL integrity remains separately tested rather than co
 Dedicated Keycloak and PostgreSQL verification services were stopped; synthetic and preserved
 database data remain intact. Final candidate manifest: 34 text files, empty index, no changed
 committed migrations. Diff whitespace and heuristic credential/artifact checks passed; the only
-credential-pattern match was an explicitly fake HTTP fixture key. No staging, commit or push.
-The targeted corrections are ready for review; a commit still requires explicit approval.
+credential-pattern match was an explicitly fake HTTP fixture key. At that checkpoint there was no
+staging, commit or push and the corrections awaited review; they were subsequently committed as 1b93fc4.
 
 ## Limits and review gate
 
@@ -229,12 +232,44 @@ need trusted operator review. There is no durable result recovery or step resume
 M7 scheduling and M8 cost enforcement remain future milestones. Historical binary provenance and
 unexplained live 500/502 limitations remain in the earlier evidence documents.
 
-Credential scanning is heuristic and cannot prove absence of arbitrary/encoded secrets. No staging,
-commit or push is authorized. Stop for review of this candidate before proceeding.
+Credential scanning is heuristic and cannot prove absence of arbitrary/encoded secrets. The
+pre-commit "no staging, commit or push" gate is historical; M6 was subsequently committed as 1b93fc4.
 
-## Exact candidate manifest
+## Evidence levels after commit
 
-34 text files (12 modified, 22 new); unstaged. Previously committed migrations are unchanged.
+Reconciled on 2026-10-15 from the TRX files under ignored `artifacts/m6-tests/`, file modification
+times and git history. No build or test was rerun for this reconciliation.
+
+| Level | Run (2026-10-14, +03:00) | Result | Coverage |
+| --- | --- | --- | --- |
+| Historical, pre-correction | 12:34:46 | 669 passed, 0 failed, 0 skipped | Code before the integrity correction; not current evidence. |
+| Partial | 21:58:07 / 21:58:49 | 74 focused passed / 354 passed, 70 of 424 discovered not executed | Focused run; unconfigured-integration run. Not full verification. |
+| Full suite, post-correction | 22:03:19–22:03:35 | 700 passed, 0 failed, 0 skipped | Follows the last source/test changes (latest `PostgresLifecycleStore.cs` at 22:01). |
+| Unit only, undocumented before now | 22:44:26 | 22 passed | `LifecycleDomainTests` and `LifecycleServiceTests` only; no PostgreSQL, Keycloak or provisioning. Its timestamp is 64 seconds before the initializer timestamp; it does not cover the final provisioning change. TRX SHA-256 `3abb1860d9cc4e6c712aba059ab2aec4e29c14283e3f0fc6871fa792e0873628`. |
+| No evidence | — | — | `scripts/Initialize-FactoryLifecycle.ps1` was last modified at 22:45:30, 42 minutes after the 700-test run and 22 seconds before commit. |
+
+The 700-test result must not be presented as verification after the final provisioning change.
+No test invokes the initializer; the full run used databases provisioned by an earlier script
+version. The committed initializer has no recorded execution. The pre-change script content
+was not preserved, so the exact change cannot be reconstructed. Ordering relies on file
+modification times, which are filesystem metadata rather than proof of content change.
+Closing this gap requires a separately approved run: the initializer (normal and `-BaselineOnly`)
+against new isolated databases, followed by `Test-FactoryLifecycle.ps1 -IncludeKeycloak`.
+
+Reported during development but not recorded in this repository, and therefore not verified here:
+a fresh post-correction build with 0 warnings/errors, a 21-case identifier validation check, and a
+GitHub commit-status query that returned no status contexts. No remote CI pass is claimed. The full
+suite was not rerun after the final provisioning change or for the push.
+
+Observed, not changed: `Initialize-FactoryLifecycle.ps1` validates database names case-sensitively
+(`-cnotmatch`) with a 63-byte limit, while `Test-FactoryLifecycle.ps1` uses case-insensitive
+`-notmatch` without a length limit. The setup examples above name `factory_m6_final`/`factory_m6_legacy`;
+the 700-test run used `factory_M6_correction` and `factory_m6_correction_legacy`.
+
+## Commit manifest (1b93fc4)
+
+34 text files (12 modified, 22 new), as committed in 1b93fc4 and matching the historical
+pre-commit candidate list. Previously committed migrations are unchanged.
 
 ```text
 AGENTS.md

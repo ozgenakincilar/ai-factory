@@ -1,19 +1,21 @@
 # Current state — fresh-session handoff
 
 Implementation verification date: **2026-10-14**, Europe/Istanbul.
-M6 implementation and fresh verification are recorded below; older milestone evidence remains historical.
+M6 implementation and its verification evidence levels are recorded below; older milestone evidence remains historical.
 
 ## Start here
 
 Read [AGENTS.md](../AGENTS.md), [Accuracy Protocol](AI_ENGINEERING_ACCURACY_PROTOCOL.md),
 this document, and [DECISIONS.md](DECISIONS.md) before editing. Actual source and executed
-verification are authoritative. Local branch `master` remains at
-`ce9f8b078c8355dbf086c96fd3d0b7412b6495e4`, with an uncommitted M6 candidate.
-M5B.2 remains committed/pushed as e1bced7. No staging, commit, push or M7 work is authorized.
+verification are authoritative. M6 is committed on `master` as
+`1b93fc4e0f82e942d82be1ba1372d496961eb0cb`; on 2026-10-15 `git ls-remote` showed origin master
+at that commit, and the user confirmed the commit/push was authorized. M5B.2 remains
+committed/pushed as e1bced7. M7 (Durable Workflow Orchestration) is the next planned milestone;
+no M7 work is authorized. Future commits and pushes require explicit approval.
 
 ## Milestone 6 current handoff
 
-The approved synchronous lifecycle integration is implemented locally. Explicit authenticated
+The approved synchronous lifecycle integration is committed as 1b93fc4. Explicit authenticated
 Generator requests admit a durable command, run Analyst then Architect outside transactions,
 and atomically publish immutable artifacts with command completion. Human Reviewer authorization
 and existing decision receipts remain independent. No automatic execution or durable scheduling.
@@ -22,17 +24,23 @@ Historical pre-correction verification on 2026-10-14: build **0 warnings/errors*
 including PostgreSQL and four live Keycloak cases. Fresh and upgrade migrations and EF model-drift
 validation passed. The original verification database was left untouched; separate M6 and historical
 regression databases were used. See [Product Lifecycle](PRODUCT_LIFECYCLE.md) for exact evidence,
-roles, HTTP contracts, manifest and limitations. Review the local candidate before any commit.
-M7–M16, including Terraform/Multi-Cloud/BYOC, remain future work.
+roles, HTTP contracts, manifest and limitations. M7–M16, including Terraform/Multi-Cloud/BYOC, remain future work.
 
-The subsequent audit reproduced the managed-publication integrity gap, now corrected locally.
-Fresh correction verification: **700 passed, 0 failed, 0 skipped**, build **0 warnings/errors**,
+The subsequent audit reproduced the managed-publication integrity gap, corrected before the M6 commit.
+Post-correction full-suite run: **700 passed, 0 failed, 0 skipped**, build **0 warnings/errors**,
 including four live Keycloak cases. Corrected fresh migration, upgrade preservation/compatibility
 and EF drift checks passed. Older regression cases use the separately approved M5B.2 baseline
 database; the expanded upgrade test supplies targeted M6-schema compatibility evidence, not a
 claim that all historical tests run against M6. Dedicated verification services are stopped and
-all data preserved. M6 architecture is approved; final review and commit authorization remain
-outstanding. See Product Lifecycle for exact TRX evidence and remaining limitations.
+all data preserved. The 700-test run (2026-10-14 22:03) preceded the final change to
+`scripts/Initialize-FactoryLifecycle.ps1` (file timestamp 22:45, shortly before commit). The only
+later recorded run was 22 domain/service unit tests without PostgreSQL, Keycloak or provisioning;
+its TRX timestamp (22:44:26) also precedes the initializer timestamp. The full suite was not rerun
+after the final provisioning change. No test invokes the initializer, so the committed initializer
+version is unverified. A post-correction build, a 21-case identifier validation check and an empty
+remote commit-status query were reported during development but have no record in this repository;
+they are reported, not verified, and no remote CI pass is claimed. See
+[evidence levels](PRODUCT_LIFECYCLE.md#evidence-levels-after-commit) for details.
 
 ## Milestone 5B.2 handoff (historical)
 
@@ -161,6 +169,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 5A | Committed persistent review foundation; see REVIEW_FOUNDATION.md |
 | 5B.1 | Committed/pushed JWT authentication and project authorization; see AUTHENTICATION.md |
 | 5B.2 | Committed/pushed secure human approval transactions, e1bced7; see HUMAN_DECISIONS.md |
+| 6 | Committed/pushed product lifecycle and atomic review publication, 1b93fc4; initializer unverified, see PRODUCT_LIFECYCLE.md |
 
 StockFlow is the first planned end-to-end pilot; RiftMind AI is a separate intended product.
 Neither is an implemented product or Factory dependency. No implementation/test/review agent,
@@ -292,7 +301,7 @@ logging. Prior sandbox limitations include NuGet access and Windows Event Log pe
   during that copy. Treat input collections as stable while submitting a request.
 - Existing Class1 files, empty template test, and stale weatherforecast HTTP example remain;
   unrelated cleanup was deliberately excluded.
-- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 implementation already received architectural approval; it now awaits final correctness verification and commit review.
+- Explicit user authorization is required before future staging, commits, pushes or milestone implementation. M6 is committed as 1b93fc4; the committed lifecycle initializer still lacks execution evidence.
 
 See [workflow design](WORKFLOW.md), [decisions](DECISIONS.md),
 [Analyst evidence](STRUCTURED_OUTPUTS.md), and [Architect evidence](ARCHITECT_AGENT.md).

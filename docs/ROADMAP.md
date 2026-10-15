@@ -12,7 +12,7 @@ functionality in the baseline. This document now records that planning context w
 its priorities. The user also supplied the dependency rules, M13A–M16 priorities and preliminary
 estimates, and the M15 beta-hardening scope below from that planning discussion.
 
-**M6 is now an approved, implemented local candidate awaiting review; M7–M16 remain planned/future work.**
+**M6 is approved and committed as 1b93fc4; M7–M16 remain planned/future work. M7 is the next planned milestone and is not authorized.**
 Estimated durations are preliminary planning ranges, not commitments or validated delivery
 forecasts. M6 architectural approval was subsequently supplied explicitly; its implementation and verification are recorded in [Product Lifecycle](PRODUCT_LIFECYCLE.md). No later milestone is authorized.
 
@@ -21,7 +21,7 @@ decisions do not automatically authorize infrastructure apply or trigger executi
 
 ## M6 — Product Lifecycle & Review Integration
 
-Status: implemented local candidate, awaiting review. Priority: **P0**. Original preliminary estimate: **1–2 weeks**; the corrected database/security design reassessed this to **3–5 weeks**, still a planning range, not a validated commitment.
+Status: implemented and committed as 1b93fc4; the committed lifecycle initializer lacks execution evidence (see [evidence levels](PRODUCT_LIFECYCLE.md#evidence-levels-after-commit)). Priority: **P0**. Original preliminary estimate: **1–2 weeks**; the corrected database/security design reassessed this to **3–5 weeks**, still a planning range, not a validated commitment.
 
 Goal: Connect the existing Analyst → Architect workflow to persistent human review.
 
