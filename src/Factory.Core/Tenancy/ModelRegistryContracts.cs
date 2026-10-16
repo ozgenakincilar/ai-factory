@@ -6,7 +6,7 @@ namespace Factory.Core.Tenancy;
 
 // Customer-provided models (M8.4). The Factory never restricts which model a customer registers;
 // it measures capabilities and makes the customer decide explicitly when a model is unverified.
-public enum ModelProtocol { OpenAiCompatible }
+public enum ModelProtocol { OpenAiCompatible, Anthropic }
 public enum ModelVerificationStatus { Unverified, Verified, Failed }
 
 // ApiKey is accepted once at registration, encrypted immediately and never returned.

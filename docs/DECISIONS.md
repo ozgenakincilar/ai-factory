@@ -300,6 +300,22 @@ precondition, next case version, stale publication instead of overwrite).
   defence); private-network endpoints stay out of scope until a separate mechanism is approved.
 - Each run snapshots its model at submission, so reassignment never changes a running workflow.
 
+## Anthropic provider — M8.4b (2026-10-16)
+
+- Claude calls use the official Anthropic .NET SDK (`Anthropic` NuGet), not an OpenAI-compatible
+  shim; structured output uses `output_config.format` with the agents' existing JSON schemas, which
+  fit the documented Anthropic schema subset (one type array, no unsupported keywords).
+- The Factory default provider is chosen per worker with `Generation:Provider` (`openai` default,
+  `anthropic`); only the selected provider's key is required. Per-step routing remains M8.5.
+- Demo model `claude-haiku-5-5` (lowest current price) for the user's USD 2 Anthropic limit.
+  Its price depends on prompt length; the flat price table records the higher (>100K) tier, so
+  every Anthropic estimate and reservation is an upper bound. Trade-off: the Factory cap stops
+  earlier than real spend would require, but it can never be overrun by long prompts.
+- Customers may register Anthropic credentials (`Anthropic` protocol) under the same rules as
+  OpenAI-compatible endpoints: encrypted key, egress policy, verification, explicit risk acceptance,
+  no fallback. The SDK client always receives an explicit key and never auto-resolves environment or
+  profile credentials; SDK retries are disabled.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Database, [ValidateRange(1,8)][int]$Concurrency = 1)
+param([Parameter(Mandatory)][string]$Database, [ValidateRange(1,8)][int]$Concurrency = 1, [ValidateSet('openai','anthropic')][string]$Provider = 'openai')
 $ErrorActionPreference='Stop'
 # Local development worker against a dedicated, initialized M7 database. Never the owner login.
 if($Database -cnotmatch '\Afactory_[A-Za-z0-9_]+\z' -or $Database -eq 'factory_review_5a'){throw 'Invalid isolated database name.'}
@@ -7,8 +7,9 @@ $db=Get-Content "$repo/artifacts/review-postgres/connection.json" -Raw | Convert
 $worker=Get-Content "$repo/artifacts/review-postgres/orchestration.json" -Raw | ConvertFrom-Json
 $values=@{
     'ConnectionStrings__Orchestration'="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_orchestration_worker;Password=$($worker.Password)"
-    # The generic host loads Development User Secrets (OpenAI:ApiKey) only in Development.
+    # The generic host loads Development User Secrets (OpenAI:ApiKey, Anthropic:ApiKey) only in Development.
     'DOTNET_ENVIRONMENT'='Development'
+    'Generation__Provider'=$Provider
     'Worker__Concurrency'="$Concurrency"
 }
 $saved=@{}

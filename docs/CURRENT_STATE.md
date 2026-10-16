@@ -24,8 +24,11 @@ suite then **781 passed, 0 failed, 0 skipped**. Durable regeneration of existing
 stale instead of overwrite) replaces the retired M6 route: full suite **786 passed, 0 failed,
 0 skipped**. M8.4a (customer-provided OpenAI-compatible models: AES-GCM credential protection,
 organization model registry, capability verification, explicit risk acceptance, run model snapshots,
-SSRF-guarded egress, no silent fallback) is an uncommitted local candidate verified with **828
-passed, 0 failed, 0 skipped**. Future commits and pushes require explicit approval.
+SSRF-guarded egress, no silent fallback) is committed and pushed as `c7eb11d` (828 passed). M8.4b
+(Anthropic provider via the official SDK: `Generation:Provider` selection, customer Anthropic
+credentials, verified Claude Haiku 5.5 price as an upper bound) is a local candidate verified with
+**841 passed, 0 failed, 0 skipped**; no live Anthropic generation call yet (the account has no
+credit). Future commits and pushes require explicit approval.
 
 ## Milestone 8.1 current handoff
 
@@ -229,7 +232,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 8.1 | Committed/pushed per-call usage metering and operator prices, 7da963f (763 passed; one live metered call), see COST_CONTROLS.md |
 | 8.2 | Committed/pushed tenancy, organization-admin decisions and organization usage, 4c7789d (767 passed), see COST_CONTROLS.md |
 | 8.3 | Committed/pushed budgets, reservations, retired sync generation, durable regeneration, 2564a85 (786 passed), see COST_CONTROLS.md |
-| 8.4a | Uncommitted local candidate: customer-provided OpenAI-compatible models (828 passed), see COST_CONTROLS.md |
+| 8.4a | Committed/pushed customer-provided OpenAI-compatible models, c7eb11d (828 passed), see COST_CONTROLS.md |
+| 8.4b | Local candidate: Anthropic provider (841 passed; live call pending account credit), see COST_CONTROLS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

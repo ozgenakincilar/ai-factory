@@ -70,6 +70,33 @@ public class ModelRegistryTests
     }
 
     [OrchestrationFact]
+    public async Task ACustomerAnthropicModelRunsTheWorkflowWithTheCustomersOwnKey()
+    {
+        await Durable.Drain(); await using var f = await LifecycleFixture.Create(); await using var server = await FakeAnthropicServer.StartAsync();
+        var id = Guid.NewGuid();
+        var model = await Durable.Api.RegisterAsync(f.Actor, f.Organization, id,
+            new ModelRegistration("claude-" + id.ToString("N")[..8], ModelProtocol.Anthropic, server.BaseUrl, "claude-haiku-5-5", CustomerKey, 1_000_000, 1_000_000),
+            Protector.Protect(CustomerKey, ModelEndpoint.SecretContext(f.Organization, id)));
+        Assert.Equal(ModelProtocol.Anthropic, model.Protocol);
+        var endpoint = await Durable.Api.GetEndpointAsync(f.Actor, f.Organization, model.Id);
+        var (status, structured) = await new ModelVerifier(new CustomerModelProviderFactory(Protector, Loopback)).VerifyAsync(endpoint, default);
+        await Durable.Api.RecordVerificationAsync(f.Actor, f.Organization, model.Id, status, structured);
+        await Durable.Api.AssignAsync(f.Actor, f.Project, model.Id, acceptCapabilityRisk: false);
+        var run = await Durable.Submit(f); var fallback = new FactoryModel();
+        for (var i = 0; i < 3; i++) Assert.Equal(StepOutcome.Completed, await Processor(fallback).ProcessNextAsync("worker", default));
+        var view = await Durable.Api.GetRunAsync(f.Actor, f.Project, run.RunId);
+        Assert.Equal(RunStatus.Succeeded, view.Status);
+        // One verification call plus two workflow calls, all on the customer's own key; no Factory model.
+        Assert.Equal((0, 3, CustomerKey), (fallback.Calls, server.Messages, server.LastApiKey));
+        // The workflow calls carry the reserved worst-case bound, not the provider default.
+        Assert.Equal(DurableWorkflowLimits.MaxOutputTokens, server.LastBody!["max_tokens"]!.GetValue<int>());
+        // Two calls of 16 input (including cache counters) + 7 output tokens at one micro-USD per token.
+        Assert.Equal(new UsageTotals(2, 32, 14, 46, 0, 0), view.Usage);
+        Assert.Equal("customer:" + model.Id.ToString("N"), Assert.Single((await Durable.Api.GetUsageAsync(f.Actor, f.Project,
+            DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddMinutes(1))).Models).Provider);
+    }
+
+    [OrchestrationFact]
     public async Task UnverifiedOrNonStructuredModelsNeedExplicitCustomerAcceptance()
     {
         await using var f = await LifecycleFixture.Create(); await using var server = await FakeOpenAiServer.StartAsync();

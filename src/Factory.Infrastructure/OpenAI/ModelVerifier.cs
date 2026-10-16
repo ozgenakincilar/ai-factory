@@ -31,7 +31,7 @@ public sealed class ModelVerifier(IModelProviderFactory factory)
             }
             catch (JsonException) { return (ModelVerificationStatus.Verified, false); }
         }
-        catch (ClientResultException ex) when (ex.Status == 400)
+        catch (Exception ex) when (ex is ClientResultException { Status: 400 } or global::Anthropic.Exceptions.AnthropicBadRequestException)
         {
             // Reachable and authenticated, but the endpoint rejects strict structured output.
             return (ModelVerificationStatus.Verified, false);

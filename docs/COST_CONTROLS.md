@@ -2,10 +2,9 @@
 
 Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#milestone-8-plan-2026-10-15-user-approved)).
 **M8.1 usage metering committed and pushed as `7da963f`; M8.2 tenancy as `4c7789d`; M8.3 budgets,
-retired synchronous generation and durable regeneration as `2564a85`. M8.4a customer-provided
-OpenAI-compatible models implemented as an uncommitted local candidate**
-([M8.4a](#m84a--customer-provided-models-openai-compatible)). M8.4b (Anthropic) and M8.5
-decomposition/routing/parallel steps are not started.
+retired synchronous generation and durable regeneration as `2564a85`; M8.4a customer-provided
+OpenAI-compatible models as `c7eb11d`. M8.4b Anthropic provider implemented as a local candidate**
+([M8.4b](#m84b--anthropic-provider)). M8.5 decomposition/routing/parallel steps are not started.
 This document describes inspected code and executed local verification, not production readiness.
 
 ## M8.1 — Usage metering
@@ -258,7 +257,7 @@ SHA-256 `e75699de3c9a0d11ba0bb16dc1ae7720d63219674f7684d64e6ba7569f5def2e`.
 ## M8.4a — Customer-provided models (OpenAI-compatible)
 
 Additive migration `20261016050000_ModelRegistry` (embedded `ModelRegistry.sql`). The Anthropic
-adapter (M8.4b) follows once the user supplies an Anthropic API key.
+adapter followed in [M8.4b](#m84b--anthropic-provider).
 
 - **Credentials.** `ISecretProtector` / `AesGcmSecretProtector`: AES-256-GCM, 32-byte master key from
   `Secrets:MasterKey` (base64; User Secrets or environment), never stored in the database. The
@@ -328,3 +327,60 @@ URL rejection, admin-only access and 503 without a master key.
 - `Run-FactoryApi.ps1`/`Run-FactoryWorker.ps1` do not provision a master key; operators set
   `Secrets:MasterKey` themselves.
 - Verification calls are not metered; customer-declared prices are trusted as declared.
+
+## M8.4b — Anthropic provider
+
+Additive migration `20261016070000_AnthropicModels` (embedded `AnthropicModels.sql`) widens the
+registry protocol check to `Anthropic`; existing rows are unchanged.
+
+- **Adapter.** `AnthropicModelProvider` uses the official Anthropic .NET SDK (`Anthropic` 12.58.0)
+  and the Messages API: system prompt, one user message, `max_tokens` = the reserved bound, and
+  structured output through `output_config.format` with the agent's unchanged JSON schema.
+  `end_turn` → completed; `refusal` → refused; any other stop reason → incomplete. Usage counts all
+  prompt tokens (input plus cache writes and reads) as input; the served model name is recorded.
+  The key is always explicit (no environment/profile credential resolution), SDK retries are 0,
+  timeout 90 s.
+- **Factory provider.** The worker chooses its default provider with `Generation:Provider`
+  (`openai` default, `anthropic`); `Anthropic:ApiKey` (User Secrets) and optional `Anthropic:Model`
+  (default `claude-haiku-5-5`). `Run-FactoryWorker.ps1 -Provider anthropic` sets it. Reservations
+  and usage use provider `anthropic`, so the existing Provider/Lifetime budget of USD 1.90 applies.
+- **Price.** `scripts/model-prices.sql` adds `anthropic`/`claude-haiku-5-5`, verified 2026-10-16 on
+  the official pricing page. Haiku 5.5 costs $0.10/$0.50 per 1M tokens up to 100,000 prompt tokens
+  and $0.50/$2.50 above; the flat table records the higher tier, so estimates are upper bounds.
+  Applied to `factory_m7_verify_20261015`.
+- **Customer Anthropic credentials.** Protocol `Anthropic` in model registration (base URL e.g.
+  `https://api.anthropic.com`); the same encryption, egress policy, verification (HTTP 400 →
+  reachable but not structured), risk acceptance and no-fallback rules as M8.4a.
+
+### Executed verification — 2026-10-16
+
+SDK 10.0.103, local candidate on top of `c7eb11d`; no live generation calls.
+
+1. Migration replayed inside `BEGIN … ROLLBACK` on `factory_m85_verify_20261016`, then applied by
+   the initializer to it and to `factory_m7_verify_20261015` (upgrade), plus fresh
+   `factory_m86_verify_20261016` and `_legacy` (baseline).
+2. A new unit test showed the SDK's `Model.ToString()` returns the JSON form with quotes, which
+   would have broken price matching; the adapter now reads the raw wire value. Targeted run after the
+   fix: 48 passed.
+3. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **841 passed, 0 failed, 0 skipped** (828 + 13 new), including four live
+   Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_03_34_30.trx`,
+   SHA-256 `1b7f0c142d18a82f5f9a9f1a8890108d62e47348e575d7dd691b81d8dc2882c3`.
+   Solution-wide vulnerable-package scan (including `Anthropic` 12.58.0): none.
+4. The Anthropic key in User Secrets authenticated against the free `GET /v1/models` endpoint
+   (HTTP 200); no generation call was made because the account has no credit yet.
+
+New cases (loopback fake Messages API) cover the request shape (key header, version header, model,
+bound, system, user message, unchanged schema), usage including cache counters and served model,
+stop reasons, no client retries on 429/500/529, customer verification through the egress policy
+(structured, not structured, 400, 401, connect-time refusal), key validation without echo, and a
+full durable run on a customer's Anthropic key with organization pricing and attribution.
+
+### M8.4b limits
+
+- No live Anthropic generation has been verified; real structured-output behaviour of Claude Haiku
+  5.5 on the Factory's schemas (including enum casing) is untested until the account has credit.
+- The flat price table cannot express prompt-length tiers; Haiku estimates are upper bounds.
+- Thinking/effort are left at model defaults (Haiku 5.5: adaptive, effort medium); thinking tokens
+  count toward the reserved output bound and are billed as output.
+- Prompt caching, streaming and Anthropic fallbacks are not used.
