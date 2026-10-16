@@ -42,7 +42,7 @@ GRANT EXECUTE ON FUNCTION orchestration.submit(text,text,text,text,uuid,text,jso
     orchestration.read_run(text,text,text,text,uuid), orchestration.cancel(text,text,text,text,uuid),
     orchestration.decide(text,text,text,text,uuid,uuid,text), orchestration.authorize_watch(text,text,text,text),
     orchestration.read_usage(text,text,text,text,timestamptz,timestamptz),
-    orchestration.read_plan(text,text,text,text,uuid) TO factory_lifecycle_runtime;
+    orchestration.read_plan(text,text,text,text,uuid), orchestration.list_runs(text,text,text,text) TO factory_lifecycle_runtime;
 GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(uuid,bytea),
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]),

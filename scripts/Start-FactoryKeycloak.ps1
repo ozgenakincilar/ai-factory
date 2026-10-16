@@ -28,6 +28,11 @@ if (-not (Test-Path $settingsPath)) {
               directAccessGrantsEnabled=$false; implicitFlowEnabled=$false; serviceAccountsEnabled=$false; fullScopeAllowed=$false
               redirectUris=@('http://127.0.0.1:58081/callback'); webOrigins=@(); protocolMappers=@(Mappers 'Human')
               attributes=@{'pkce.code.challenge.method'='S256'; 'standard.token.exchange.enabled'='false'}}
+            # Product Workspace (M12a): public PKCE client on the loopback dev origin; humans only.
+            @{clientId='factory-web'; enabled=$true; protocol='openid-connect'; publicClient=$true; standardFlowEnabled=$true
+              directAccessGrantsEnabled=$false; implicitFlowEnabled=$false; serviceAccountsEnabled=$false; fullScopeAllowed=$false
+              redirectUris=@('http://127.0.0.1:4200/*'); webOrigins=@('http://127.0.0.1:4200'); protocolMappers=@(Mappers 'Human')
+              attributes=@{'pkce.code.challenge.method'='S256'; 'post.logout.redirect.uris'='http://127.0.0.1:4200/*'; 'standard.token.exchange.enabled'='false'}}
             @{clientId='factory-agent'; enabled=$true; protocol='openid-connect'; publicClient=$false; secret=$settings.ServiceSecret
               standardFlowEnabled=$false; directAccessGrantsEnabled=$false; implicitFlowEnabled=$false; serviceAccountsEnabled=$true
               fullScopeAllowed=$false; protocolMappers=@(Mappers 'Service'); attributes=@{'standard.token.exchange.enabled'='false'}}

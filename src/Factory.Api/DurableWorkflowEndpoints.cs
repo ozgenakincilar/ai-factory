@@ -16,6 +16,7 @@ public static class DurableWorkflowEndpoints
         builder.Services.AddSingleton<IWorkflowRunStore>(store);
         builder.Services.AddSingleton<Factory.Core.Tenancy.ITenantUsageStore>(store);
         builder.Services.AddSingleton<Factory.Core.Tenancy.IModelRegistryStore>(store);
+        builder.Services.AddSingleton<Factory.Core.Tenancy.IWorkspaceDirectory>(store);
         var policy = Factory.Infrastructure.Security.ModelEndpointPolicy.FromConfiguration(
             builder.Configuration.GetValue<bool>(Factory.Infrastructure.Security.ModelEndpointPolicy.Setting),
             builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"));
@@ -105,6 +106,11 @@ public static class DurableWorkflowEndpoints
                 if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
                 return Results.Json(submission, statusCode: 202);
             })).RequireAuthorization();
+        // Product Workspace listings: the caller's projects and a project's recent runs.
+        app.MapGet("/api/me/projects", (HttpContext http, Factory.Core.Tenancy.IWorkspaceDirectory directory, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await directory.GetMyProjectsAsync(actor, http.RequestAborted)))).RequireAuthorization();
+        group.MapGet("", (string projectId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.ListRunsAsync(actor, projectId, http.RequestAborted))));
         group.MapGet("/{runId:guid}", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.GetRunAsync(actor, projectId, runId, http.RequestAborted))));
         // Project usage over [from, to); defaults to the last 30 days. Generator or Human Reviewer.

@@ -17,7 +17,8 @@ namespace Factory.Infrastructure.Orchestration;
 
 // One instance per database role: the API uses the lifecycle runtime (submit/read only);
 // the worker uses the orchestration worker role (claim/renew/complete/fail/publish only).
-public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore, IModelRegistryStore
+public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore, IModelRegistryStore,
+    IWorkspaceDirectory
 {
     public Task<RegisteredModel> RegisterAsync(TrustedIdentity actor, string organizationId, Guid id, ModelRegistration registration, byte[] encryptedApiKey,
         CancellationToken ct = default)
@@ -70,6 +71,19 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
         catch (LifecycleException) { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
         return Read<RunSubmission>("submit", actor, request.ProjectId, ct, P("key", key), P("version", workflowVersion),
             P("input", JsonSerializer.Serialize(request, Json), NpgsqlDbType.Jsonb));
+    }
+
+    public Task<IReadOnlyList<RunSummary>> ListRunsAsync(TrustedIdentity actor, string projectId, CancellationToken ct = default)
+        => string.IsNullOrWhiteSpace(projectId) || projectId.Length > 200
+            ? throw new OrchestrationException(OrchestrationError.Forbidden)
+            : Read<IReadOnlyList<RunSummary>>("list_runs", actor, projectId, ct);
+
+    public async Task<IReadOnlyList<WorkspaceProject>> GetMyProjectsAsync(TrustedIdentity actor, CancellationToken ct = default)
+    {
+        var json = await Call("SELECT tenancy.my_projects(@issuer,@subject,@kind)::text", ct,
+            P("issuer", actor.Issuer), P("subject", actor.Subject), P("kind", actor.Kind.ToString()));
+        try { return JsonSerializer.Deserialize<IReadOnlyList<WorkspaceProject>>(json ?? "[]", Json) ?? []; }
+        catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
     }
 
     public async Task<RunPlan> GetPlanAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default)

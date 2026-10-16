@@ -11,6 +11,15 @@ public sealed record ProjectUsageTotal(string ProjectId, UsageTotals Totals);
 public sealed record OrganizationUsage(string OrganizationId, DateTimeOffset From, DateTimeOffset To, UsageTotals Totals,
     IReadOnlyList<ProjectUsageTotal> Projects, IReadOnlyList<ModelUsageTotal> Models);
 
+// A project the caller can read; CanDecide: the caller is an active Human Owner/Admin of its organization.
+public sealed record WorkspaceProject(string ProjectId, string? OrganizationId, IReadOnlyList<string> Roles, bool CanDecide);
+
+public interface IWorkspaceDirectory
+{
+    // Empty for unknown or inactive identities.
+    Task<IReadOnlyList<WorkspaceProject>> GetMyProjectsAsync(TrustedIdentity actor, CancellationToken ct = default);
+}
+
 public interface ITenantUsageStore
 {
     // Active Owner/Admin of the organization only; half-open interval [from, to), at most 366 days.

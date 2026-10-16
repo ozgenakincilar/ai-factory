@@ -9,7 +9,10 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Factory.Api.Security;
 
-public sealed record FactoryAuthSettings(string Authority, string Audience, string HumanClient, string ServiceClient, bool LocalHttp)
+// WebClient (optional): the Product Workspace's public PKCE client; its access tokens identify humans
+// exactly like HumanClient tokens (same hardcoded factory_kind mapper, same audience).
+public sealed record FactoryAuthSettings(string Authority, string Audience, string HumanClient, string ServiceClient, bool LocalHttp,
+    string? WebClient = null)
 {
     public static FactoryAuthSettings Read(IConfiguration configuration, IHostEnvironment environment)
     {
@@ -18,14 +21,16 @@ public sealed record FactoryAuthSettings(string Authority, string Audience, stri
         var human = configuration["Authentication:HumanClient"] ?? "";
         var service = configuration["Authentication:ServiceClient"] ?? "";
         var local = configuration.GetValue<bool>("Authentication:AllowDevelopmentLoopbackHttp");
+        var web = configuration["Authentication:WebClient"];
         if (!Uri.TryCreate(authority, UriKind.Absolute, out var uri) ||
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
             (local ? !environment.IsDevelopment() || authority != "http://127.0.0.1:58080/realms/factory-dev"
                    : uri.Scheme != "https") ||
             string.IsNullOrWhiteSpace(audience) || string.IsNullOrWhiteSpace(human) ||
-            string.IsNullOrWhiteSpace(service) || human == service || audience == human || audience == service)
+            string.IsNullOrWhiteSpace(service) || human == service || audience == human || audience == service ||
+            (web is not null && (string.IsNullOrWhiteSpace(web) || web == human || web == service || web == audience)))
             throw new InvalidOperationException("invalid_factory_authentication_configuration");
-        return new(authority, audience, human, service, local);
+        return new(authority, audience, human, service, local, web);
     }
 
     // Keycloak access tokens have payload typ=Bearer; ID tokens have typ=ID.
@@ -42,7 +47,7 @@ public sealed record FactoryAuthSettings(string Authority, string Audience, stri
         var client = One(user, "azp");
         var kind = One(user, "factory_kind");
         if (subject is null || subject.Length > 255) return null;
-        if (client == HumanClient && kind == "Human") return new(Authority, subject, PrincipalKind.Human);
+        if ((client == HumanClient || (WebClient is not null && client == WebClient)) && kind == "Human") return new(Authority, subject, PrincipalKind.Human);
         if (client == ServiceClient && kind == "Service") return new(Authority, subject, PrincipalKind.Service);
         return null;
     }

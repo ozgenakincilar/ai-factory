@@ -31,7 +31,7 @@ GRANT EXECUTE ON FUNCTION tenancy.read_usage(text,text,text,text,timestamptz,tim
     tenancy.register_model(text,text,text,text,uuid,text,text,text,text,bytea,bigint,bigint),
     tenancy.list_models(text,text,text,text), tenancy.model_endpoint(text,text,text,text,uuid),
     tenancy.record_verification(text,text,text,text,uuid,text,boolean),
-    tenancy.assign_model(text,text,text,text,uuid,boolean) TO factory_lifecycle_runtime;
+    tenancy.assign_model(text,text,text,text,uuid,boolean), tenancy.my_projects(text,text,text) TO factory_lifecycle_runtime;
 DO $$ DECLARE t record; BEGIN
     EXECUTE 'REVOKE CREATE ON SCHEMA tenancy FROM factory_orchestration_worker, factory_lifecycle_runtime';
     FOR t IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname='tenancy' LOOP

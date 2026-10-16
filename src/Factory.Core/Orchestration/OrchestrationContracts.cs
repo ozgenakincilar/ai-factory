@@ -95,6 +95,8 @@ public interface IWorkflowRunStore
         => SubmitAsync(actor, key, request, WorkflowVersions.AnalysisArchitecture, ct);
     // workflowVersion is analysis-architecture-v1 or decomposition-v1 (the plan needs human approval).
     Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, string workflowVersion, CancellationToken ct = default);
+    // Same audience as GetRunAsync: the 50 most recent runs, newest first, as safe summaries.
+    Task<IReadOnlyList<RunSummary>> ListRunsAsync(TrustedIdentity actor, string projectId, CancellationToken ct = default);
     // Same audience as GetRunAsync. NotFound until the plan exists (decomposition-v1 runs only).
     Task<RunPlan> GetPlanAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
     // Regenerates an existing work item as the next version of its review case. expectedETag is the
@@ -111,6 +113,10 @@ public interface IWorkflowRunStore
     // Same audience as GetRunAsync; half-open interval [from, to), at most 366 days.
     Task<ProjectUsage> GetUsageAsync(TrustedIdentity actor, string projectId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default);
 }
+
+// Run list entry: status metadata only, never input, outputs or identities.
+public sealed record RunSummary(Guid RunId, RunStatus Status, string WorkflowVersion, string? FailureCode, DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt, int PendingDecisions);
 
 // A run changed and was committed. A hint only: clients re-read authoritative state.
 public sealed record RunChanged(string ProjectId, Guid RunId, RunStatus Status);

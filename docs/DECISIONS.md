@@ -356,6 +356,21 @@ Taken under the same delegated authority; open to the user's review.
 - **Failure semantics.** Any failed part fails the run (no partial publication); running siblings
   lose their lease and their late results are refused.
 
+## Product Workspace slice — M12a (2026-10-16, delegated)
+
+Taken under the user's delegated authority after "kaldığımız yerden devam edelim" (M9 blocked on a
+container-runtime decision); open to review.
+
+- Angular 22.2 (standalone, signals, zoneless) per the roadmap; English UI strings for now.
+- OIDC via `angular-oauth2-oidc` (Authorization Code + PKCE, new public client `factory-web`) instead
+  of a hand-written flow; versions pinned exactly.
+- The API accepts the web client through an optional `Authentication:WebClient`, keeping one
+  hardcoded `factory_kind` profile per client; any other client stays rejected.
+- Same-origin development through the dev-server proxy (no CORS policy in the API).
+- SignalR over long polling, because the hub deliberately accepts tokens only in headers.
+- Two read-only listing functions instead of exposing tables; run lists keep the safe projection
+  (no task text).
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it
