@@ -270,6 +270,25 @@ Tasks:
 Acceptance criteria: Factory can generate a starter application deterministically and build/test
 it in an isolated environment without giving untrusted code access to Factory infrastructure.
 
+### M9 proposed execution design (2026-10-16, pending user decision)
+
+Inspected on the development machine (2026-10-16): no Docker, Podman or installed WSL distribution.
+Generated code is untrusted, so it must never build or run in the Factory's own processes or on the
+host directly. Proposal, not a decision:
+
+- **Local development:** Docker Desktop on WSL 2 (requires installation, administrator rights and a
+  restart; the user decides). One short-lived container per job, built from a pinned, digest-locked
+  .NET SDK + Node image; non-root user, read-only root filesystem, a per-job writable workspace,
+  `--network none` by default (package restore through an allow-listed proxy or a pre-populated
+  cache), CPU/memory/PID/time/disk limits, no host mounts besides the job workspace, no Factory
+  credentials or Docker socket inside.
+- **Production (with M13A):** the same image on Azure Container Apps jobs or a dedicated runner pool
+  without access to the Factory database, Key Vault or tenant networks.
+- **Evidence:** build/test logs, exit codes, image digest and resource usage stored as immutable,
+  hashed run evidence attached to the work item.
+- **Before M9 starts:** choose the local runtime, confirm the template stack (Angular + ASP.NET Core +
+  PostgreSQL) and the DDD layer layout of the starter template.
+
 ## M10 — Developer Agent
 
 Status: planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
