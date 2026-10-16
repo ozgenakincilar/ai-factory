@@ -91,4 +91,37 @@ if (builder.Configuration.GetValue<bool>("Verification:Enabled"))
     builder.Services.AddHostedService<VerificationWorkerService>();
 }
 
+// M10.3 development jobs (opt-in): the Developer Agent on approved review artifacts. Needs the same
+// template root and runner image, plus Development:Model and its verified prices (micro-USD per 1M
+// tokens). Caps are user decisions: USD 0.40 per job and USD 2 in total by default.
+if (builder.Configuration.GetValue<bool>("Development:Enabled"))
+{
+    var templates = builder.Configuration["Templates:Root"];
+    var runner = builder.Configuration["Verification:RunnerImage"];
+    var model = builder.Configuration["Development:Model"] ?? "gpt-5.4-mini";
+    var input = builder.Configuration.GetValue<long?>("Development:InputMicrosPerMillion");
+    var output = builder.Configuration.GetValue<long?>("Development:OutputMicrosPerMillion");
+    if (string.IsNullOrWhiteSpace(templates) || string.IsNullOrWhiteSpace(runner) || input is not > 0 || output is not > 0)
+        throw new InvalidOperationException("Development needs Templates:Root, Verification:RunnerImage and the model prices.");
+    var apiKey = builder.Configuration["OpenAI:ApiKey"];
+    OpenAiConfiguration.ValidateApiKey(apiKey);
+    var client = new ChatClient(model, new ApiKeyCredential(apiKey!), new OpenAI.OpenAIClientOptions
+    {
+        RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0),
+        NetworkTimeout = TimeSpan.FromSeconds(240)
+    });
+    var sandbox = new Factory.Infrastructure.Execution.DockerSandboxOptions(runner, Factory.Core.Execution.SandboxLimits.Default);
+    var limits = Factory.Core.Development.DevelopmentLimits.Default with
+    {
+        CostCapMicros = builder.Configuration.GetValue("Development:JobCapMicros", Factory.Core.Development.DevelopmentLimits.Default.CostCapMicros)
+    };
+    builder.Services.AddSingleton(new Factory.Orchestration.Development.DevelopmentProcessor(new PostgresOrchestrationStore(connection),
+        new Factory.Infrastructure.Templates.FileSystemTemplateCatalog(templates),
+        new Factory.Orchestration.Development.DevelopmentModel(model, new OpenAiModelProvider(client, model), input.Value, output.Value),
+        new Factory.Infrastructure.Execution.DockerWorkspaceRunner(sandbox), new Factory.Infrastructure.Execution.DockerSandbox(sandbox),
+        new Factory.Infrastructure.Execution.GitWorkspaceDiffer(sandbox), limits,
+        builder.Configuration.GetValue("Development:TotalCapMicros", 2_000_000L)));
+    builder.Services.AddHostedService<DevelopmentWorkerService>();
+}
+
 builder.Build().Run();

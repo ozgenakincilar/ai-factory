@@ -53,6 +53,24 @@ export interface VerificationEvidence {
 export interface VerificationView { job: VerificationSummary; evidence: VerificationEvidence | null; evidenceSha256: string | null; }
 export interface VerificationSubmission { jobId: string; status: VerificationStatus; replayed: boolean; }
 
+// Development jobs (M10.3): the Developer Agent implementing an approved review artifact version.
+export type DevelopmentStatus = 'queued' | 'running' | 'verified' | 'verificationFailed' | 'notFinished' | 'budgetExhausted'
+  | 'modelFailed' | 'sandboxFailed' | 'failed';
+export interface DevelopmentSummary {
+  jobId: string; caseId: string; artifactVersion: number; applicationName: string; status: DevelopmentStatus;
+  failureCode: string | null; costMicros: number | null; createdAt: string; updatedAt: string;
+}
+export interface DevelopmentChange { path: string; kind: 'added' | 'modified' | 'deleted'; requirementIds: string[]; }
+export interface DevelopmentCall { turn: number; status: string; model: string | null; inputTokens: number | null; outputTokens: number | null; reservedMicros: number; costMicros: number; }
+export interface DevelopmentEvidence {
+  formatVersion: number; jobId: string; caseId: string; artifactVersion: number; artifactSha256: string; templateSha256: string;
+  applicationName: string; model: string; status: DevelopmentStatus; failureCode: string | null; turns: number; actions: number;
+  costMicros: number; calls: DevelopmentCall[]; changes: DevelopmentChange[]; baseCommit: string | null; finalCommit: string | null;
+  diff: string | null; diffSha256: string | null; verification: SandboxReport | null; log: string[];
+}
+export interface DevelopmentView { job: DevelopmentSummary; evidence: DevelopmentEvidence | null; evidenceSha256: string | null; }
+export interface DevelopmentSubmission { jobId: string; status: DevelopmentStatus; replayed: boolean; }
+
 // Review cases (M5B.2 decisions on published artifacts). The ETag is the optimistic-concurrency token.
 export type ReviewState = 'pendingReview' | 'approved' | 'rejected' | 'changesRequested';
 export type ReviewDecision = 'approve' | 'reject' | 'requestChanges';
@@ -136,6 +154,22 @@ export class FactoryApi {
   submitVerification(projectId: string, applicationName: string, idempotencyKey: string): Observable<VerificationSubmission> {
     return this.http.post<VerificationSubmission>(`${this.base}/projects/${encodeURIComponent(projectId)}/verifications`,
       { templateId: starterTemplate.id, templateVersion: starterTemplate.version, applicationName },
+      { headers: new HttpHeaders({ 'Idempotency-Key': idempotencyKey }) });
+  }
+
+  developments(projectId: string): Observable<DevelopmentSummary[]> {
+    return this.http.get<DevelopmentSummary[]>(`${this.base}/projects/${encodeURIComponent(projectId)}/developments`);
+  }
+
+  development(projectId: string, jobId: string): Observable<DevelopmentView> {
+    return this.http.get<DevelopmentView>(`${this.base}/projects/${encodeURIComponent(projectId)}/developments/${encodeURIComponent(jobId)}`);
+  }
+
+  // Names the exact approved version and hash the reviewer saw; a newer version answers 412.
+  submitDevelopment(projectId: string, caseId: string, artifactVersion: number, artifactSha256: string, applicationName: string,
+    idempotencyKey: string): Observable<DevelopmentSubmission> {
+    return this.http.post<DevelopmentSubmission>(`${this.base}/projects/${encodeURIComponent(projectId)}/developments`,
+      { caseId, artifactVersion, artifactSha256, templateId: starterTemplate.id, templateVersion: starterTemplate.version, applicationName },
       { headers: new HttpHeaders({ 'Idempotency-Key': idempotencyKey }) });
   }
 

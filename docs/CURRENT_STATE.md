@@ -55,7 +55,10 @@ M10 design, model (gpt-5.4-mini) and budget (USD 0.40 per job, USD 2 total) are 
 (authoritative workspace with protected rules, sandbox session, deterministic Git diff) is verified
 with 967 passed. M10.2 (Developer Agent loop with cost guard, limits and traceability) is verified with
 977 passed and one paid gpt-5.4-mini run that implemented a small domain task and passed offline
-verification (USD 0.009); see [Developer Agent](DEVELOPER_AGENT.md).
+verification (USD 0.009). M10.3 (development jobs on approved review artifacts, immutable evidence,
+API, Develop panel and diff view) is verified with 986 passed, 23 web tests and a browser acceptance run
+in which the Developer Agent implemented StockFlow Product CRUD across the DDD layers and passed offline
+verification (USD 0.0645; total paid Developer spend USD 0.206 of USD 2); see [Developer Agent](DEVELOPER_AGENT.md).
 
 ## Milestone 8.1 current handoff
 
@@ -269,7 +272,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 9.2 | Committed/pushed offline sandbox runner, d97e9c5 (930 passed), see TEMPLATES_AND_EXECUTION.md |
 | 9.3 | Committed/pushed verification jobs and immutable evidence, b95bf13 (937 passed), see TEMPLATES_AND_EXECUTION.md |
 | 10.1 | Committed/pushed developer workspace, sandbox session, Git snapshot, 80f3759 (967 passed), see DEVELOPER_AGENT.md |
-| 10.2 | Developer Agent loop (977 passed, 1 paid live run verified for USD 0.009), see DEVELOPER_AGENT.md |
+| 10.2 | Committed/pushed Developer Agent loop, a667e3c (977 passed), see DEVELOPER_AGENT.md |
+| 10.3 | Development jobs, evidence, Develop UI; StockFlow Product CRUD acceptance verified (986 passed), see DEVELOPER_AGENT.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

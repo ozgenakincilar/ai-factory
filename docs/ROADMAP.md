@@ -296,7 +296,7 @@ host directly. Proposal, not a decision:
 
 ## M10 — Developer Agent
 
-Status: **M10.1 and M10.2 implemented** (see [Developer Agent](DEVELOPER_AGENT.md)); M10.3 planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
+Status: **implemented** as M10.1–M10.3; the StockFlow Product CRUD acceptance run was verified (see [Developer Agent](DEVELOPER_AGENT.md)). Priority: **P0**. Estimated effort: **3–4 weeks**.
 
 Goal: Implement source-code development based on explicitly approved requirements and architecture.
 

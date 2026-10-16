@@ -29,6 +29,13 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
         - finish {summary}: only after build and test pass.
 
         Rules:
+        - The application is a freshly generated starter: the requested feature does NOT exist yet.
+          You implement it by WRITING NEW FILES (any new path in the right layer is allowed) and by
+          modifying existing files where needed (for example Program.cs or AppDbContext.cs). Missing
+          feature files are expected; they are yours to create, not a blocker.
+        - Work in few turns: read only what you need (usually 1 turn), then write the implementation and
+          its tests, build, test, fix, finish. Never finish without changes unless every requirement is
+          already implemented.
         - Layers: Domain (no dependencies; aggregates, entities, value objects, domain events and ALL
           business rules), Application (use cases and ports; depends only on Domain), Infrastructure
           (EF Core/PostgreSQL adapters), Api (endpoints and composition root). Never put business rules
@@ -38,7 +45,10 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
         - Project, solution, build, package and Git files and the architecture tests are protected and
           cannot be changed. There is no network: use only packages the projects already reference.
         - Add unit tests for the domain rules you implement in the existing test project.
-        - Keep changes minimal and focused. Read before modifying existing files.
+        - Keep changes minimal and focused. Know a file's content before modifying it.
+        - "Known files" always shows the CURRENT content of every file you have read or written,
+          including your own edits. A file shown there counts as read: never read it again; act on it.
+          Prefer several writes in one turn over many small turns.
         - Build and test after writing; fix failures. Use at most the actions you need.
         """;
 
@@ -48,6 +58,11 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
         var calls = new List<DeveloperCall>();
         var log = new List<string>();
         var observations = new List<string>();
+        // Files the agent has seen, most recent last; their current content is shown every turn so
+        // the model never has to re-read (earlier turns' raw results are not repeated).
+        var known = new List<string>();
+        var history = new List<string>();
+        void Know(string path) { known.Remove(path); known.Add(path); }
         var actions = 0;
         var turn = 0;
         var webChanged = false;
@@ -62,7 +77,7 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
         {
             for (turn = 1; turn <= limits.MaxTurns; turn++)
             {
-                var prompt = Prompt(task, workspace, observations, turn);
+                var prompt = Prompt(task, workspace, observations, known, history, turn);
                 var estimated = CostGuard.EstimateInputTokens(SystemPrompt, prompt, DeveloperJson.OutputSchema.JsonSchema);
                 if (!costs.TryReserve(estimated, limits.MaxOutputTokens, out var reservation))
                     return Result(DevelopmentStatus.BudgetExhausted, "cost_cap_reached");
@@ -82,6 +97,7 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
                     return Result(DevelopmentStatus.ModelFailed, "invalid_model_output");
                 log.Add($"turn {turn}: {Truncate(parsed.Notes, 300)}");
                 observations.Clear();
+                var summary = new List<string>();
                 foreach (var action in parsed.Actions.Take(limits.MaxActionsPerTurn))
                 {
                     if (++actions > limits.MaxActions) return Result(DevelopmentStatus.NotFinished, "action_limit_reached");
@@ -96,7 +112,9 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
                     string observation;
                     try
                     {
-                        observation = await Execute(action, workspace, session, allowed, ct);
+                        observation = await Execute(action, workspace, session, allowed, known, ct);
+                        if (action.Kind is DeveloperActionKind.Read or DeveloperActionKind.Write) Know(action.Path!);
+                        if (action.Kind == DeveloperActionKind.Delete) known.Remove(action.Path!);
                         if (action.Kind is DeveloperActionKind.Write or DeveloperActionKind.Delete && action.Path!.StartsWith("web/", StringComparison.Ordinal)) webChanged = true;
                         if (action.Kind == DeveloperActionKind.Test && webChanged)
                         {
@@ -112,7 +130,9 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
                     catch (WorkspaceException ex) { observation = "rejected: " + ex.Message; }
                     catch (SandboxUnavailableException ex) { return Result(DevelopmentStatus.SandboxFailed, ex.Code); }
                     observations.Add($"[{action.Kind.ToString().ToLowerInvariant()} {action.Path ?? action.Text ?? ""}] {observation}");
+                    summary.Add($"{action.Kind.ToString().ToLowerInvariant()} {action.Path ?? action.Text ?? ""}".Trim() + " → " + Truncate(observation.Split('\n')[0], 80));
                 }
+                history.Add($"turn {turn}: {Truncate(parsed.Notes, 200)} | {string.Join("; ", summary)}");
                 if (parsed.Actions.Count > limits.MaxActionsPerTurn) observations.Add($"ignored: only {limits.MaxActionsPerTurn} actions run per turn");
             }
             turn = limits.MaxTurns;
@@ -121,15 +141,17 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
     }
 
     private async Task<string> Execute(DeveloperAction action, DevelopmentWorkspace workspace, IWorkspaceSession session,
-        IReadOnlySet<string> allowed, CancellationToken ct)
+        IReadOnlySet<string> allowed, IReadOnlyList<string> known, CancellationToken ct)
     {
-        string Bounded(string text) => Truncate(text, limits.MaxObservationChars / 2);
         switch (action.Kind)
         {
             case DeveloperActionKind.List:
                 return string.Join('\n', workspace.List(action.Path ?? ""));
             case DeveloperActionKind.Read:
-                return Bounded(workspace.Read(action.Path ?? ""));
+                workspace.Read(action.Path ?? "");
+                return known.Contains(action.Path!)
+                    ? "already known: its current content is under Known files; do not read it again"
+                    : "ok (content under Known files)";
             case DeveloperActionKind.Search:
                 return string.Join('\n', workspace.Search(action.Text ?? "", action.Path ?? ""));
             case DeveloperActionKind.Write or DeveloperActionKind.Delete:
@@ -161,7 +183,8 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
         $"{result.Name}: {result.Outcome.ToString().ToLowerInvariant()} (exit {result.ExitCode?.ToString() ?? "none"})\n" +
         TailOf(result.Output, limits.MaxObservationChars / 3);
 
-    private string Prompt(DevelopmentTask task, DevelopmentWorkspace workspace, IReadOnlyList<string> observations, int turn)
+    private string Prompt(DevelopmentTask task, DevelopmentWorkspace workspace, IReadOnlyList<string> observations, IReadOnlyList<string> known,
+        IReadOnlyList<string> history, int turn)
     {
         var context = new
         {
@@ -173,12 +196,29 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
                 components = task.Architecture.Components.Select(c => new { c.Id, c.Name, c.Responsibility }),
                 technologyDecisions = task.Architecture.TechnologyDecisions.Select(t => new { t.Id, t.Technology, t.Rationale }),
             },
+            featureCode = workspace.Changes().Count == 0 ? "none yet: create it" : "see changedFiles",
             files = workspace.List(),
             changedFiles = workspace.Changes().Select(c => $"{c.Kind.ToString().ToLowerInvariant()} {c.Path}"),
         };
         var builder = new StringBuilder(JsonSerializer.Serialize(context, ArchitectureJson.Options));
-        builder.Append("\n\nResults of your previous actions:\n");
+        if (turn >= 3 && workspace.Changes().Count == 0)
+            builder.Append("\n\nReminder: you have not written any file yet. Write the implementation and its tests in this turn.");
+        builder.Append("\n\nEarlier turns:\n").Append(history.Count == 0 ? "(none yet)" : string.Join('\n', history));
+        builder.Append("\n\nResults of your previous turn's actions:\n");
         builder.Append(observations.Count == 0 ? "(none yet)" : string.Join("\n\n", observations));
+        // Most recently used files first, within the known-files budget; older ones are listed by name.
+        builder.Append("\n\nKnown files (current content):\n");
+        var budget = limits.MaxKnownFileChars;
+        var omitted = new List<string>();
+        foreach (var path in known.Reverse())
+        {
+            if (!workspace.List().Contains(path)) continue;
+            var content = workspace.Read(path);
+            if (content.Length + path.Length + 16 > budget) { omitted.Add(path); continue; }
+            budget -= content.Length + path.Length + 16;
+            builder.Append("=== ").Append(path).Append(" ===\n").Append(content).Append('\n');
+        }
+        if (omitted.Count > 0) builder.Append("(not shown for space, read again if needed: ").Append(string.Join(", ", omitted)).Append(")\n");
         var prompt = builder.ToString();
         return prompt.Length <= limits.MaxPromptChars ? prompt : prompt[..limits.MaxPromptChars] + "\n…[truncated]";
     }

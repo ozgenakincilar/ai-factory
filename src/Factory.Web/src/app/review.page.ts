@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   DesignBasis, FactoryApi, RequirementStatus, ReviewArtifact, ReviewDecision, ReviewDecisionBody, ReviewSnapshot,
 } from './factory-api';
+import { DevelopPanel } from './development.page';
 import { WorkspaceState } from './workspace.state';
 
 // Mirror of the server's DecisionReasonPolicy version 1 (explicit code points). The server stays
@@ -57,7 +58,7 @@ const stateLabels: Record<ReviewSnapshot['state'], string> = {
 
 @Component({
   selector: 'app-review-page',
-  imports: [RouterLink, DatePipe, FormsModule],
+  imports: [RouterLink, DatePipe, FormsModule, DevelopPanel],
   template: `
     <p><a routerLink="/">Projects</a> / <a [routerLink]="['/projects', id()]">{{ id() }}</a> / review</p>
     @if (snapshot(); as review) {
@@ -158,6 +159,9 @@ const stateLabels: Record<ReviewSnapshot['state'], string> = {
         }
         @if (message()) { <p role="status">{{ message() }}</p> }
       </section>
+      @if (review.state === 'approved' && verified() === true && isGenerator()) {
+        <app-develop-panel [projectId]="id()" [caseId]="review.id" [version]="review.currentVersion" [sha256]="review.contentHash" />
+      }
     } @else if (failure()) { <p class="error" role="alert">{{ failure() }}</p> }`,
   styles: `table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
     th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -192,6 +196,7 @@ export class ReviewPage implements OnInit {
   protected readonly explained = computed(() => reasonIsValid('reject', this.reasonText()));
   protected readonly canDecide = computed(() => this.verified() === true && !this.busy());
   protected readonly label = statusLabel;
+  protected readonly isGenerator = computed(() => this.state.project()?.roles.includes('Generator') ?? false);
   protected readonly trace = traceText;
   private etag = '';
   private hash = '';

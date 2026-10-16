@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
@@ -78,7 +79,7 @@ describe('ReviewPage', () => {
       imports: [ReviewPage],
       providers: [provideRouter([]),
         { provide: FactoryApi, useValue: { review: () => of({ snapshot, etag: '"review-c1-r3"' }), reviewArtifact: () => of(bytes.buffer), decideReview } },
-        { provide: WorkspaceState, useValue: { open: () => Promise.resolve() } }],
+        { provide: WorkspaceState, useValue: { open: () => Promise.resolve(), project: signal({ projectId: 'p1', organizationId: 'o1', roles: ['Generator', 'Reviewer'], canDecide: true }) } }],
     });
     const fixture = TestBed.createComponent(ReviewPage);
     fixture.componentRef.setInput('id', 'p1');
@@ -104,6 +105,8 @@ describe('ReviewPage', () => {
       { decision: 'approve', artifactVersion: 2, artifactSha256: hash, reason: null });
     expect(element.textContent).toContain('Decision recorded.');
     expect(element.querySelector('.state')?.textContent).toBe('approved');
+    // An approved, verified case offers development to generators.
+    expect(element.querySelector('app-develop-panel')).not.toBeNull();
   });
 
   it('disables every decision when the content does not match the published hash', async () => {

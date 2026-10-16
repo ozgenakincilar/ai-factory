@@ -373,6 +373,20 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M10.3 development jobs (2026-10-16, delegated)
+
+Taken under the user's delegated authority after "evet"; open to review.
+
+- **Bound to the approved bytes**: a job names the case's current approved version and its SHA-256; the
+  approval is checked at submission and again before any model call.
+- **No paid re-execution**: a lost worker ends the job (`worker_lost`) instead of retrying, and its cap
+  counts as spent; the total cap is enforced in the database at claim time.
+- **Strong tier for the Architect in local runs**: gpt-4o-mini repeatedly produced untraced technology
+  decisions not marked as recommendations; instead of relaxing the validator, the routing policy's Strong
+  tier (Architecture, Planning) is mapped to gpt-5.4-mini with `-StrongModel` (verified price).
+- **Prompt and context fixes from live evidence** (persistent known files, "the feature is new", no
+  contradictory read rule, reminder after two turns without writes, 60 actions), each with a test.
+
 ## M10 Developer Agent model and budget (2026-10-16, user decision)
 
 - The user accepted the M10 design in the Roadmap and chose a stronger OpenAI model than gpt-4o-mini.

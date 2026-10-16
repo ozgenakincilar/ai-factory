@@ -142,6 +142,52 @@ public class DeveloperAgentTests
     }
 
     [Fact]
+    public async Task FilesReadOrWritten_StayVisibleInLaterTurns_WithTheirCurrentContent()
+    {
+        // Found by the M10.3 acceptance run: showing only the previous turn's results made the model
+        // re-read the same files until the action limit.
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Domain/Common/AggregateRoot.cs")),
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;\n// v1\n", "FR-1")),
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;\n// v2\n", "FR-1")),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var (agent, workspace, _, _) = Create(model);
+        await agent.RunAsync(DeveloperScripts.Task, workspace);
+        foreach (var later in model.Prompts.Skip(2))
+            Assert.Contains("public abstract class AggregateRoot<TId>", later);
+        Assert.Contains("// v1", model.Prompts[2]);
+        Assert.DoesNotContain("// v1", model.Prompts[3]); // only the current content is shown
+        Assert.Contains("// v2", model.Prompts[3]);
+        Assert.Contains("turn 1:", model.Prompts[3]);    // compact history of earlier turns
+        Assert.Contains("read src/SampleShop.Domain/Common/AggregateRoot.cs", model.Prompts[3]);
+    }
+
+    [Fact]
+    public async Task ReReadingAKnownFile_IsAnsweredWithAReminder()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Api/Program.cs")),
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Api/Program.cs")),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var (agent, workspace, _, _) = Create(model);
+        await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Contains("[read src/SampleShop.Api/Program.cs] ok (content under Known files)", model.Prompts[1]);
+        Assert.Contains("[read src/SampleShop.Api/Program.cs] already known", model.Prompts[2]);
+    }
+
+    [Fact]
+    public async Task AModelThatOnlyReads_IsToldTheFeatureIsNew_AndRemindedToWrite()
+    {
+        // Found by the M10.3 acceptance run: the model treated missing feature files as a blocker.
+        var looping = new ScriptedModel(DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.List)));
+        var (agent, workspace, _, _) = Create(looping, DevelopmentLimits.Default with { MaxTurns = 4 });
+        await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.All(looping.Prompts, p => Assert.Contains("\"featureCode\":\"none yet: create it\"", p));
+        Assert.DoesNotContain("Reminder: you have not written any file yet", looping.Prompts[1]);
+        Assert.Contains("Reminder: you have not written any file yet", looping.Prompts[2]);
+    }
+
+    [Fact]
     public async Task UnsafeOrUntracedEdits_AreRejected_AndReportedToTheModel()
     {
         var model = new ScriptedModel(
@@ -159,7 +205,9 @@ public class DeveloperAgentTests
         Assert.Empty(result.Changes);
         Assert.Empty(session.Written);
         // Six actions, six rejections: two protected files, an unknown and a missing requirement, two unsafe paths.
-        Assert.Equal(6, model.Prompts[1].Split("rejected: workspace_").Length - 1);
+        var results = model.Prompts[1][model.Prompts[1].IndexOf("Results of your previous turn's actions:", StringComparison.Ordinal)..];
+        results = results[..results.IndexOf("Known files", StringComparison.Ordinal)];
+        Assert.Equal(6, results.Split("rejected: workspace_").Length - 1);
         Assert.Contains("rejected: workspace_ProtectedPath", model.Prompts[1]);
         Assert.Contains("rejected: workspace_MissingRequirement", model.Prompts[1]);
         Assert.Contains("rejected: workspace_InvalidPath", model.Prompts[1]);

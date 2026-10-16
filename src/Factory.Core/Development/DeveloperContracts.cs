@@ -16,10 +16,11 @@ public sealed record DevelopmentTask(string Task, AnalysisResult Analysis, Archi
 }
 
 public sealed record DevelopmentLimits(int MaxTurns, int MaxActionsPerTurn, int MaxActions, int MaxOutputTokens, int MaxPromptChars,
-    int MaxObservationChars, long CostCapMicros)
+    int MaxObservationChars, long CostCapMicros, int MaxKnownFileChars = 80_000)
 {
-    // USD 0.40 per job (user decision of 2026-10-16).
-    public static DevelopmentLimits Default { get; } = new(12, 8, 40, 12_000, 120_000, 24_000, 400_000);
+    // USD 0.40 per job (user decision of 2026-10-16). The prompt bound covers task, history, the last
+    // turn's results and the known files.
+    public static DevelopmentLimits Default { get; } = new(12, 8, 60, 12_000, 160_000, 24_000, 400_000);
 }
 
 public enum DeveloperActionKind { List, Read, Search, Write, Delete, Build, Test, Finish }
@@ -44,6 +45,14 @@ public interface IWorkspaceSession : IAsyncDisposable
     Task WriteAsync(string path, string content, CancellationToken ct = default);
     Task DeleteAsync(string path, CancellationToken ct = default);
     Task<StepResult> RunAsync(SandboxStep step, CancellationToken ct = default);
+}
+
+// The reviewable change between two trusted file sets (M10.1 GitSnapshot behind it).
+public sealed record WorkspaceDiff(string BaseCommit, string FinalCommit, string Diff, string DiffSha256);
+
+public interface IWorkspaceDiffer
+{
+    Task<WorkspaceDiff> CreateAsync(IReadOnlyList<TemplateFile> baseFiles, IReadOnlyList<TemplateFile> finalFiles, CancellationToken ct = default);
 }
 
 public interface IWorkspaceRunner

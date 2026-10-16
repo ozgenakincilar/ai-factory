@@ -18,6 +18,7 @@ public static class DurableWorkflowEndpoints
         builder.Services.AddSingleton<Factory.Core.Tenancy.IModelRegistryStore>(store);
         builder.Services.AddSingleton<Factory.Core.Tenancy.IWorkspaceDirectory>(store);
         builder.Services.AddSingleton<Factory.Core.Execution.IVerificationJobs>(store);
+        builder.Services.AddSingleton<Factory.Core.Development.IDevelopmentJobs>(store);
         var policy = Factory.Infrastructure.Security.ModelEndpointPolicy.FromConfiguration(
             builder.Configuration.GetValue<bool>(Factory.Infrastructure.Security.ModelEndpointPolicy.Setting),
             builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"));
@@ -170,6 +171,69 @@ public static class DurableWorkflowEndpoints
                 http.Response.Headers.ETag = "\"sha256-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) + "\"";
                 return Results.Bytes(bytes, "application/json; charset=utf-8");
             }));
+    }
+
+    // M10.3 development jobs: a Generator asks the Developer Agent to implement the CURRENT approved version
+    // of a review case (version and SHA-256 as shown to the reviewer); stale versions answer 412.
+    public static void MapDevelopments(this WebApplication app)
+    {
+        var developments = app.MapGroup("/api/projects/{projectId}/developments").RequireAuthorization();
+        developments.MapPost("", (string projectId, HttpContext http, Factory.Core.Development.IDevelopmentJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var header = http.Request.Headers["Idempotency-Key"];
+                if (header.Count != 1 || !Guid.TryParseExact(header.ToString(), "D", out var key) || key == Guid.Empty)
+                    return Error(400, "invalid_idempotency_key");
+                var fields = await ReadFields(http, ["caseId", "artifactVersion", "artifactSha256", "templateId", "templateVersion", "applicationName"]);
+                Factory.Core.Development.DevelopmentRequest request;
+                try
+                {
+                    request = new Factory.Core.Development.DevelopmentRequest(fields["caseId"].GetGuid(), fields["artifactVersion"].GetInt32(),
+                        fields["artifactSha256"].GetString()!, fields["templateId"].GetString()!, fields["templateVersion"].GetString()!,
+                        fields["applicationName"].GetString()!).Validate();
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or Factory.Core.Templates.TemplateException)
+                { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
+                var submission = await jobs.SubmitDevelopmentAsync(actor, projectId, key, request, http.RequestAborted);
+                http.Response.Headers.Location = $"/api/projects/{Uri.EscapeDataString(projectId)}/developments/{submission.JobId:D}";
+                if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
+                return Results.Json(submission, statusCode: 202);
+            }));
+        developments.MapGet("", (string projectId, HttpContext http, Factory.Core.Development.IDevelopmentJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await jobs.ListDevelopmentsAsync(actor, projectId, http.RequestAborted))));
+        developments.MapGet("/{jobId:guid}", (string projectId, Guid jobId, HttpContext http, Factory.Core.Development.IDevelopmentJobs jobs,
+            FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await jobs.GetDevelopmentAsync(actor, projectId, jobId, http.RequestAborted))));
+        developments.MapGet("/{jobId:guid}/evidence", (string projectId, Guid jobId, HttpContext http, Factory.Core.Development.IDevelopmentJobs jobs,
+            FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var bytes = await jobs.GetDevelopmentEvidenceAsync(actor, projectId, jobId, http.RequestAborted);
+                http.Response.Headers.ETag = "\"sha256-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) + "\"";
+                return Results.Bytes(bytes, "application/json; charset=utf-8");
+            }));
+    }
+
+    // Strict body: exactly the named fields of one JSON object, at most 2 KiB.
+    private static async Task<Dictionary<string, System.Text.Json.JsonElement>> ReadFields(HttpContext http, string[] names)
+    {
+        if (!http.Request.HasJsonContentType()) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        var buffer = new byte[2049]; var length = 0;
+        while (length < buffer.Length)
+        {
+            var count = await http.Request.Body.ReadAsync(buffer.AsMemory(length), http.RequestAborted);
+            if (count == 0) break; length += count;
+        }
+        if (length > 2048) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(buffer.AsMemory(0, length), new System.Text.Json.JsonDocumentOptions { MaxDepth = 2 });
+            var fields = document.RootElement.EnumerateObject().ToDictionary(f => f.Name, f => f.Value.Clone(), StringComparer.Ordinal);
+            if (fields.Count != names.Length || names.Any(n => !fields.ContainsKey(n))) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+            return fields;
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or ArgumentException)
+        { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
     }
 
     // Strict body: exactly {"templateId","templateVersion","applicationName"} as strings, at most 2 KiB.

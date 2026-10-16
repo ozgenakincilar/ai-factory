@@ -41,6 +41,12 @@ describes inspected code and executed local verification, not production readine
   retry replays). Reject and request changes need a reason; 409/412 reload the case.
 - No backend change.
 
+## M10.3 — Develop panel and development page
+
+Approved, content-verified reviews offer a Develop panel to Generators; the project page lists development
+jobs and `/projects/{id}/developments/{jobId}` shows the changes with requirement ids, the diff, offline
+verification, cost and evidence hashes; see [Developer Agent](DEVELOPER_AGENT.md#m103--development-jobs-evidence-and-acceptance).
+
 ## M9.3 — verification panel and page
 
 The project page has a starter-verification panel and `/projects/{id}/verifications/{jobId}` shows a

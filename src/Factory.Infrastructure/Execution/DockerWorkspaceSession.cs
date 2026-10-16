@@ -99,11 +99,15 @@ public sealed class DockerWorkspaceRunner(DockerSandboxOptions options) : IWorks
         => await DockerWorkspaceSession.StartAsync(options, files, ct);
 }
 
-public sealed record WorkspaceDiff(string BaseCommit, string FinalCommit, string Diff, string DiffSha256);
-
 // Produces the reviewable diff from two trusted file sets in a fresh sandbox where no workspace code
 // ever runs: only git, with hooks, external diff drivers and text conversion disabled. Fixed author,
 // committer and dates make the commit ids depend on the content only.
+public sealed class GitWorkspaceDiffer(DockerSandboxOptions options) : IWorkspaceDiffer
+{
+    public Task<WorkspaceDiff> CreateAsync(IReadOnlyList<TemplateFile> baseFiles, IReadOnlyList<TemplateFile> finalFiles, CancellationToken ct = default)
+        => GitSnapshot.CreateAsync(options, baseFiles, finalFiles, ct);
+}
+
 public static class GitSnapshot
 {
     public const int MaxDiffBytes = 4 * 1024 * 1024;
