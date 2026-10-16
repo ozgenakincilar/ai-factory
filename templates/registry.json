@@ -1,0 +1,12 @@
+{
+  "templates": [
+    {
+      "id": "dotnet-angular-postgres-ddd",
+      "version": "1.0.0",
+      "directory": "starter-v1",
+      "token": "FactoryStarter",
+      "kebabToken": "factory-starter",
+      "contentSha256": "2e41c7460734330ee90de0bcaed0f096f489ff3563fef099b876fa01add41323"
+    }
+  ]
+}

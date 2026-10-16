@@ -1,4 +1,4 @@
-param([string]$Filter = '', [switch]$IncludeKeycloak, [string]$Database = 'factory_m6', [string]$LegacyDatabase = 'factory_m6_legacy', [string]$SdkDll = '')
+param([string]$Filter = '', [switch]$IncludeKeycloak, [switch]$IncludeDocker, [string]$Database = 'factory_m6', [string]$LegacyDatabase = 'factory_m6_legacy', [string]$SdkDll = '')
 $ErrorActionPreference='Stop'
 if($Database -notmatch '^factory_[A-Za-z0-9_]+$'){throw 'Invalid isolated database name.'}
 if($LegacyDatabase -notmatch '^factory_[A-Za-z0-9_]+$' -or $LegacyDatabase -eq 'factory_review_5a' -or $Database -eq 'factory_review_5a'){
@@ -18,8 +18,10 @@ $values=@{
     FACTORY_LIFECYCLE_OWNER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_owner;Password=$($db.OwnerPassword)"
     FACTORY_LIFECYCLE_TEST_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_lifecycle_runtime;Password=$($lifecycle.Password)"
     FACTORY_ORCHESTRATION_WORKER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_orchestration_worker;Password=$($worker.Password)"
-    FACTORY_KEYCLOAK_SETTINGS=$null; FACTORY_KEYCLOAK_HUMAN_TOKENS=$null
+    FACTORY_KEYCLOAK_SETTINGS=$null; FACTORY_KEYCLOAK_HUMAN_TOKENS=$null; FACTORY_DOCKER_TESTS=$null
 }
+# Docker cases build generated applications in pinned containers (M9); they need Docker Desktop running.
+if($IncludeDocker){$values.FACTORY_DOCKER_TESTS='1'}
 if($IncludeKeycloak){$values.FACTORY_KEYCLOAK_SETTINGS="$repo/artifacts/keycloak/development.json";$values.FACTORY_KEYCLOAK_HUMAN_TOKENS="$repo/artifacts/keycloak/human-tokens.json"}
 $saved=@{}
 Push-Location $repo

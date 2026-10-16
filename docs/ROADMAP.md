@@ -12,7 +12,7 @@ functionality in the baseline. This document now records that planning context w
 its priorities. The user also supplied the dependency rules, M13A–M16 priorities and preliminary
 estimates, and the M15 beta-hardening scope below from that planning discussion.
 
-**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9's local runtime (Docker Desktop + WSL 2) is decided; M9 awaits the template stack/DDD layout confirmation; M9–M16 otherwise remain planned.**
+**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9.1 (starter template, registry, deterministic generation) is implemented; M9.2/M9.3 are planned; M9–M16 otherwise remain planned.**
 Estimated durations are preliminary planning ranges, not commitments or validated delivery
 forecasts. M6 architectural approval was subsequently supplied explicitly; its implementation and verification are recorded in [Product Lifecycle](PRODUCT_LIFECYCLE.md). No later milestone is authorized.
 
@@ -250,7 +250,8 @@ workflow states; the popup depends on M12.
 
 ## M9 — Application Templates & Secure Execution
 
-Status: planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
+Status: **M9.1 implemented** (see [Templates and Execution](TEMPLATES_AND_EXECUTION.md)); M9.2 sandbox
+runner and M9.3 workspaces/evidence/integration planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
 
 Goal: Establish a reproducible Angular + ASP.NET Core + PostgreSQL application template and
 isolated build environment.
@@ -274,7 +275,7 @@ it in an isolated environment without giving untrusted code access to Factory in
 
 Update 2026-10-16: the user approved Docker Desktop + WSL 2 as the local runtime; it is installed and
 smoke-tested (see [Decisions](DECISIONS.md#m9-local-execution-runtime-2026-10-16-user-decision)). The
-template stack and the starter template's DDD layer layout still need confirmation.
+user then confirmed the template stack and the DDD layer layout ("evet").
 
 Inspected on the development machine (2026-10-16): no Docker, Podman or installed WSL distribution.
 Generated code is untrusted, so it must never build or run in the Factory's own processes or on the

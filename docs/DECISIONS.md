@@ -368,8 +368,25 @@ Taken under the same delegated authority; open to the user's review.
   no-new-privileges` reported uid 65534, no network (HTTP request failed), read-only root filesystem
   and the cgroup limits (memory 268435456, pids 64, cpu 100000/100000). This verifies the isolation
   flags on this machine only; it is not M9's sandbox implementation or a security review.
-- Still open before M9 starts: the template stack (proposed Angular + ASP.NET Core + PostgreSQL) and
-  the starter template's DDD layer layout (proposed Domain/Application/Infrastructure/Api).
+- The user then confirmed ("evet") the template stack **Angular + ASP.NET Core + PostgreSQL** and the
+  starter template's DDD layer layout **Domain / Application / Infrastructure / Api** (Domain without
+  dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
+  composition root).
+
+## M9 slicing and template design (2026-10-16, delegated)
+
+Taken under the user's delegated authority after the confirmations above; open to review.
+
+- M9 is split into M9.1 (template, registry, deterministic generation), M9.2 (offline sandbox runner,
+  malicious-code tests) and M9.3 (per-job workspaces, immutable evidence, worker/UI integration).
+- The template is a buildable solution under placeholder names (`FactoryStarter`, `factory-starter`)
+  instead of a token syntax, so the template itself can be built and tested; generation is plain
+  ordinal replacement plus a content hash pinned in a file registry.
+- Generation is pure domain code in Factory.Core; file access stays in Factory.Infrastructure.
+- The layer rule is enforced inside every generated application by reflection-based architecture
+  tests (no extra package); M11 may add stronger static checks.
+- Offline execution (M9.2) will rely on a package cache baked into a digest-pinned runner image for the
+  template's dependencies; adding new packages needs a later allow-listed restore path.
 
 ## Azure for the M14 pilot (2026-10-16, user decision)
 
