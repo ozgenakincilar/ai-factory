@@ -18,10 +18,15 @@ $values=@{
     FACTORY_LIFECYCLE_OWNER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_owner;Password=$($db.OwnerPassword)"
     FACTORY_LIFECYCLE_TEST_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_lifecycle_runtime;Password=$($lifecycle.Password)"
     FACTORY_ORCHESTRATION_WORKER_CONNECTION="Host=127.0.0.1;Port=$($db.Port);Database=$Database;Username=factory_orchestration_worker;Password=$($worker.Password)"
-    FACTORY_KEYCLOAK_SETTINGS=$null; FACTORY_KEYCLOAK_HUMAN_TOKENS=$null; FACTORY_DOCKER_TESTS=$null
+    FACTORY_KEYCLOAK_SETTINGS=$null; FACTORY_KEYCLOAK_HUMAN_TOKENS=$null; FACTORY_DOCKER_TESTS=$null; FACTORY_RUNNER_IMAGE=$null
 }
 # Docker cases build generated applications in pinned containers (M9); they need Docker Desktop running.
-if($IncludeDocker){$values.FACTORY_DOCKER_TESTS='1'}
+if($IncludeDocker){
+    # The sandbox cases run the runner image built by scripts/Build-FactoryRunner.ps1, by immutable id.
+    if(-not(Test-Path "$repo/artifacts/runner/image.json")){throw 'Build the runner image first (scripts/Build-FactoryRunner.ps1).'}
+    $values.FACTORY_DOCKER_TESTS='1'
+    $values.FACTORY_RUNNER_IMAGE=(Get-Content "$repo/artifacts/runner/image.json" -Raw | ConvertFrom-Json).ImageId
+}
 if($IncludeKeycloak){$values.FACTORY_KEYCLOAK_SETTINGS="$repo/artifacts/keycloak/development.json";$values.FACTORY_KEYCLOAK_HUMAN_TOKENS="$repo/artifacts/keycloak/human-tokens.json"}
 $saved=@{}
 Push-Location $repo

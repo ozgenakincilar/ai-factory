@@ -45,7 +45,10 @@ end-to-end run including an approval; see [Product Workspace](PRODUCT_WORKSPACE.
 stack and DDD layer layout. M9.1 (versioned starter template `dotnet-angular-postgres-ddd` 1.0.0,
 file registry with content hash, deterministic generator) is verified with 913 passed including a
 Docker case that builds and tests a generated application; see
-[Templates and Execution](TEMPLATES_AND_EXECUTION.md). M9.2 and M9.3 are planned.
+[Templates and Execution](TEMPLATES_AND_EXECUTION.md). M9.2 (runner image with offline package caches,
+`DockerSandbox` with no network, read-only root, non-root user, capability/privilege drops,
+CPU/memory/PID/disk/time/output limits, exec-reported exit codes) is verified with 930 passed including
+8 Docker isolation cases. M9.3 is planned.
 
 ## Milestone 8.1 current handoff
 
@@ -255,7 +258,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 8.5b/c | Committed/pushed decomposition, plan approval, parallel parts, 2b29be2; Planner fix plus one successful live run (881 passed), see COST_CONTROLS.md |
 | 12a | Committed/pushed Product Workspace slice, 8d30e71 (885 passed, 8 web tests, browser e2e), see PRODUCT_WORKSPACE.md |
 | 12b | Committed/pushed review page, a93f1bd (885 passed, 15 web tests, browser e2e with approval), see PRODUCT_WORKSPACE.md |
-| 9.1 | Starter template, registry, deterministic generation (913 passed incl. Docker build/test of a generated app), see TEMPLATES_AND_EXECUTION.md |
+| 9.1 | Committed/pushed starter template, registry, deterministic generation, 9bbdec7 (913 passed), see TEMPLATES_AND_EXECUTION.md |
+| 9.2 | Offline sandbox runner and isolation tests (930 passed incl. 8 Docker isolation cases), see TEMPLATES_AND_EXECUTION.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,
