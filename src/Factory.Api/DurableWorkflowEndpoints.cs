@@ -15,6 +15,18 @@ public static class DurableWorkflowEndpoints
         var store = new PostgresOrchestrationStore(connection);
         builder.Services.AddSingleton<IWorkflowRunStore>(store);
         builder.Services.AddSingleton<Factory.Core.Tenancy.ITenantUsageStore>(store);
+        builder.Services.AddSingleton<Factory.Core.Tenancy.IModelRegistryStore>(store);
+        var policy = Factory.Infrastructure.Security.ModelEndpointPolicy.FromConfiguration(
+            builder.Configuration.GetValue<bool>(Factory.Infrastructure.Security.ModelEndpointPolicy.Setting),
+            builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"));
+        builder.Services.AddSingleton(policy);
+        // Without Secrets:MasterKey, model registration and verification answer 503.
+        var protector = Factory.Infrastructure.Security.AesGcmSecretProtector.FromConfiguration(builder.Configuration["Secrets:MasterKey"]);
+        if (protector is not null)
+        {
+            builder.Services.AddSingleton<Factory.Core.Tenancy.ISecretProtector>(protector);
+            builder.Services.AddSingleton<Factory.Core.Tenancy.IModelProviderFactory>(new Factory.Infrastructure.OpenAI.CustomerModelProviderFactory(protector, policy));
+        }
         builder.Services.AddSignalR();
         builder.Services.AddSingleton(new PostgresRunEventListener(connection));
         builder.Services.AddSingleton<WorkflowEventRelay>();
@@ -37,6 +49,39 @@ public static class DurableWorkflowEndpoints
                 if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
                 return Results.Json(submission, statusCode: 202);
             }));
+        // Customer-provided models: organization Owner/Admin only. API keys are write-only.
+        app.MapPost("/api/organizations/{organizationId}/models", (string organizationId, ModelRegistrationBody body, HttpContext http,
+            Factory.Core.Tenancy.IModelRegistryStore store, Factory.Infrastructure.Security.ModelEndpointPolicy policy, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                if (http.RequestServices.GetService<Factory.Core.Tenancy.ISecretProtector>() is not { } protector) return Error(503, "secret_store_unavailable");
+                if (!Enum.TryParse<Factory.Core.Tenancy.ModelProtocol>(body.Protocol, false, out var protocol) || string.IsNullOrWhiteSpace(body.Name)
+                    || body.Name.Length > 100 || string.IsNullOrEmpty(body.ApiKey) || body.ApiKey.Length > Factory.Core.Tenancy.ModelRegistryLimits.MaxApiKeyLength
+                    || body.ApiKey.Any(char.IsControl) || string.IsNullOrWhiteSpace(body.Model))
+                    return Error(400, "invalid_model_registration");
+                try { policy.ValidateUrl(body.BaseUrl); } catch (ArgumentException) { return Error(400, "invalid_model_endpoint"); }
+                var id = Guid.NewGuid();
+                var registration = new Factory.Core.Tenancy.ModelRegistration(body.Name.Trim(), protocol, body.BaseUrl!, body.Model, body.ApiKey,
+                    body.InputMicrosPerMillion, body.OutputMicrosPerMillion);
+                var encrypted = protector.Protect(body.ApiKey, Factory.Core.Tenancy.ModelEndpoint.SecretContext(organizationId, id));
+                return Results.Json(await store.RegisterAsync(actor, organizationId, id, registration, encrypted, http.RequestAborted), statusCode: 201);
+            })).RequireAuthorization();
+        app.MapGet("/api/organizations/{organizationId}/models", (string organizationId, HttpContext http,
+            Factory.Core.Tenancy.IModelRegistryStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.ListAsync(actor, organizationId, http.RequestAborted)))).RequireAuthorization();
+        app.MapPost("/api/organizations/{organizationId}/models/{modelId:guid}/verify", (string organizationId, Guid modelId, HttpContext http,
+            Factory.Core.Tenancy.IModelRegistryStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                if (http.RequestServices.GetService<Factory.Core.Tenancy.IModelProviderFactory>() is not { } factory) return Error(503, "secret_store_unavailable");
+                var endpoint = await store.GetEndpointAsync(actor, organizationId, modelId, http.RequestAborted);
+                var (status, structured) = await new Factory.Infrastructure.OpenAI.ModelVerifier(factory).VerifyAsync(endpoint, http.RequestAborted);
+                return Results.Json(await store.RecordVerificationAsync(actor, organizationId, modelId, status, structured, http.RequestAborted));
+            })).RequireAuthorization();
+        app.MapPut("/api/projects/{projectId}/model", (string projectId, ModelAssignmentBody body, HttpContext http,
+            Factory.Core.Tenancy.IModelRegistryStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.AssignAsync(actor, projectId, body.ModelId, body.AcceptCapabilityRisk, http.RequestAborted))))
+            .RequireAuthorization();
         // Durable regeneration of an existing work item (replaces the retired M6 route).
         app.MapPost("/api/projects/{projectId}/work-items/{workItemId:guid}/runs", (string projectId, Guid workItemId, HttpContext http,
             IWorkflowRunStore store, FactoryAuthSettings auth)
@@ -126,6 +171,7 @@ public static class DurableWorkflowEndpoints
                 OrchestrationError.NotFound => Error(404, "workflow_not_found"),
                 OrchestrationError.Conflict => Error(409, "workflow_conflict"),
                 OrchestrationError.StaleRevision => Error(412, "workflow_revision_changed"),
+                OrchestrationError.CapabilityUnverified => Error(409, "model_capability_unverified"),
                 OrchestrationError.Capacity => Error(429, "workflow_capacity"),
                 OrchestrationError.Integrity => Error(500, "workflow_integrity_failure"),
                 OrchestrationError.TransactionAborted => Error(503, "workflow_transaction_aborted"),
@@ -137,3 +183,7 @@ public static class DurableWorkflowEndpoints
 
     private static IResult Error(int status, string code) => Results.Problem(statusCode: status, title: code);
 }
+
+public sealed record ModelRegistrationBody(string? Name, string? Protocol, string? BaseUrl, string? Model, string? ApiKey,
+    long? InputMicrosPerMillion = null, long? OutputMicrosPerMillion = null);
+public sealed record ModelAssignmentBody(Guid? ModelId, bool AcceptCapabilityRisk);

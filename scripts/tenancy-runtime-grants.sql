@@ -16,6 +16,8 @@ GRANT USAGE ON SCHEMA tenancy TO factory_lifecycle_guard, factory_lifecycle_runt
 GRANT SELECT ON tenancy."Organizations", tenancy."OrganizationMemberships", tenancy."ProjectOwnership" TO factory_lifecycle_guard;
 -- UPDATE on one column is required only for FOR SHARE revocation locks; functions never update it.
 GRANT UPDATE ("Revision") ON tenancy."Organizations", tenancy."OrganizationMemberships" TO factory_lifecycle_guard;
+GRANT SELECT, INSERT ON tenancy."Models", tenancy."ProjectModels" TO factory_lifecycle_guard;
+GRANT UPDATE ("Status","StructuredOutput","VerifiedAt") ON tenancy."Models" TO factory_lifecycle_guard;
 GRANT CREATE ON SCHEMA tenancy TO factory_lifecycle_guard;
 DO $$ DECLARE f record; BEGIN
     FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='tenancy' LOOP
@@ -25,7 +27,11 @@ END $$;
 REVOKE CREATE ON SCHEMA tenancy FROM factory_lifecycle_guard;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA tenancy FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION tenancy.read_usage(text,text,text,text,timestamptz,timestamptz),
-    tenancy.read_budgets(text,text,text,text) TO factory_lifecycle_runtime;
+    tenancy.read_budgets(text,text,text,text),
+    tenancy.register_model(text,text,text,text,uuid,text,text,text,text,bytea,bigint,bigint),
+    tenancy.list_models(text,text,text,text), tenancy.model_endpoint(text,text,text,text,uuid),
+    tenancy.record_verification(text,text,text,text,uuid,text,boolean),
+    tenancy.assign_model(text,text,text,text,uuid,boolean) TO factory_lifecycle_runtime;
 DO $$ DECLARE t record; BEGIN
     EXECUTE 'REVOKE CREATE ON SCHEMA tenancy FROM factory_orchestration_worker, factory_lifecycle_runtime';
     FOR t IN SELECT schemaname,tablename FROM pg_catalog.pg_tables WHERE schemaname='tenancy' LOOP

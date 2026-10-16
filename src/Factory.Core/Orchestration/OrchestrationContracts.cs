@@ -6,7 +6,7 @@ using Factory.Core.Workflows;
 namespace Factory.Core.Orchestration;
 
 public enum OrchestrationError { InvalidCommand, Forbidden, NotFound, Conflict, Capacity, LeaseLost, Integrity, OutcomeUnknown, TransactionAborted,
-    BudgetExceeded, PriceUnknown, StaleRevision }
+    BudgetExceeded, PriceUnknown, StaleRevision, CapabilityUnverified, Unavailable }
 
 // The provider/model a worker is configured to call; required to price budget reservations.
 public sealed record ModelIdentity(string Provider, string Model);
@@ -108,6 +108,9 @@ public interface IStepQueue
     Task CompleteAnalysisAsync(Guid attemptId, byte[] leaseToken, AnalysisResult analysis, CancellationToken ct = default);
     Task CompleteArchitectureAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal architecture, CancellationToken ct = default);
     Task FailAsync(Guid attemptId, byte[] leaseToken, string failureCode, CancellationToken ct = default);
+    // The customer model endpoint snapshotted on this attempt's run, or null for the Factory default.
+    // Lease-authorized; the credential stays encrypted.
+    Task<Factory.Core.Tenancy.ModelEndpoint?> GetModelEndpointAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default);
     // Reserves the worst-case cost of one call against every applicable budget before it is made.
     // Throws BudgetExceeded or PriceUnknown (a budget applies but the model has no price).
     Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens,

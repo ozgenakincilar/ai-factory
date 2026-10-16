@@ -1,9 +1,11 @@
 # Milestone 8 — Tenant Isolation & AI Cost Controls
 
 Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#milestone-8-plan-2026-10-15-user-approved)).
-**M8.1 usage metering committed and pushed as `7da963f`; M8.2 tenancy as `4c7789d`. M8.3 budgets
-and reservations implemented as an uncommitted local candidate** ([M8.3](#m83--budgets-and-reservations)).
-M8.4 customer-provided models and M8.5 decomposition/routing/parallel steps are not started.
+**M8.1 usage metering committed and pushed as `7da963f`; M8.2 tenancy as `4c7789d`; M8.3 budgets,
+retired synchronous generation and durable regeneration as `2564a85`. M8.4a customer-provided
+OpenAI-compatible models implemented as an uncommitted local candidate**
+([M8.4a](#m84a--customer-provided-models-openai-compatible)). M8.4b (Anthropic) and M8.5
+decomposition/routing/parallel steps are not started.
 This document describes inspected code and executed local verification, not production readiness.
 
 ## M8.1 — Usage metering
@@ -252,3 +254,77 @@ to use a matching id and now also asserts that mismatch. Full suite with Postgre
 `-IncludeKeycloak`: build **0 warnings, 0 errors**; **786 passed, 0 failed, 0 skipped** (781 + 5
 regeneration cases). TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_02_34_40.trx`,
 SHA-256 `e75699de3c9a0d11ba0bb16dc1ae7720d63219674f7684d64e6ba7569f5def2e`.
+
+## M8.4a — Customer-provided models (OpenAI-compatible)
+
+Additive migration `20261016050000_ModelRegistry` (embedded `ModelRegistry.sql`). The Anthropic
+adapter (M8.4b) follows once the user supplies an Anthropic API key.
+
+- **Credentials.** `ISecretProtector` / `AesGcmSecretProtector`: AES-256-GCM, 32-byte master key from
+  `Secrets:MasterKey` (base64; User Secrets or environment), never stored in the database. The
+  authenticated context binds each ciphertext to its organization and model, so a copied ciphertext
+  does not decrypt. Keys are write-only: accepted once at registration, never returned or logged.
+  Without the master key, registration and verification answer 503 and workers treat customer
+  models as unavailable. An Azure Key Vault implementation follows with M13A.
+- **Registry (organization Owner/Admin).** `POST /api/organizations/{organizationId}/models`
+  (name, `OpenAiCompatible`, base URL, model, API key, optional customer-declared prices),
+  `GET …/models`, `POST …/models/{modelId}/verify`. Customer-declared prices are inserted into the
+  price table under provider `customer:<modelId>` with a source naming the declaring admin.
+- **Capability test.** One tiny strict-schema call on the customer's credential: valid structured
+  output → `Verified`/structured; reachable without it (including HTTP 400) → `Verified`/not
+  structured; authentication, network or protocol failure → `Failed`. Verification calls are not
+  metered (they have no run).
+- **Assignment.** `PUT /api/projects/{projectId}/model` with `modelId` (null = Factory default) and
+  `acceptCapabilityRisk`. Any model of the project's organization may be chosen; an unverified or
+  non-structured model requires explicit acceptance (otherwise 409 `model_capability_unverified`).
+  Assignments are append-only; a database trigger rejects cross-tenant assignment even for the owner
+  login. Each run snapshots its project's model at submission.
+- **Execution.** The worker resolves the run's model through `RegistryModelResolver`; a lease-
+  authorized function returns the endpoint with the ciphertext only. Usage and reservations use
+  provider `customer:<modelId>`. If the customer model cannot be used (endpoint error, no master
+  key, undecryptable credential) the step waits for a `customer_model_unavailable` decision;
+  there is never a silent fallback to a Factory model.
+- **Egress (SSRF) policy.** Absolute HTTPS URLs without credentials, query or fragment. At connect
+  time every resolved address is checked; any loopback, private (RFC 1918, CGNAT), link-local
+  (including 169.254.169.254), unique-local, multicast, reserved, unspecified, or NAT64/IPv4-mapped
+  equivalent refuses the connection, which also defeats DNS rebinding. No redirects or proxies;
+  90 s timeout; 4 MiB response buffer. `ModelEndpoints:AllowLoopbackForDevelopment` permits loopback
+  (HTTP or HTTPS) only in Development/Testing; other environments refuse to start with it set.
+  Private-network endpoints remain out of scope until a separate mechanism is approved.
+- **Least privilege.** Registry functions are runtime-only; `model_for_attempt` is worker-only and
+  lease-checked; neither role can read `tenancy."Models"` or assignments directly.
+
+### Executed verification — 2026-10-16
+
+SDK 10.0.103, uncommitted working tree on top of `2564a85`; no live LLM calls (a loopback fake
+OpenAI-compatible server stands in for customer endpoints).
+
+1. Migration replayed inside `BEGIN … ROLLBACK` on the M8.3 database, then applied by the initializer
+   to it and to the live-data database (upgrade), plus fresh `factory_m85_verify_20261016`.
+2. While building tests, an analyzer warning (ASP0016) showed the fake server's handler was bound as
+   a `RequestDelegate`, discarding its response body; it was rebound as a route handler before any
+   test run was counted. Targeted run: 198 passed, 1 not executed (Keycloak).
+3. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **828 passed, 0 failed, 0 skipped** (786 + 42 new), including four live
+   Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_03_01_50.trx`,
+   SHA-256 `68ef25267306d46eb9ad1bc61bdc92110dad1b7acefb1728bbf5a4131756719c`.
+   Solution-wide vulnerable-package scan: none.
+4. Keycloak and PostgreSQL stopped; data preserved.
+
+New cases cover AES-GCM round trip, context binding, tamper and wrong-key refusal; URL rules;
+the address table; connect-time refusal of loopback including via `localhost`; loopback allowed only
+when enabled; registration, verification, assignment and a full run on the customer's endpoint with
+the customer's own key, customer-declared pricing under an organization budget and attribution to
+`customer:<id>`; explicit acceptance for unverified/non-structured models; unreachable models and
+keyless workers waiting without fallback; run model snapshots; tenant isolation, the cross-tenant
+trigger, encrypted storage, lease-checked endpoint reads and role separation; HTTP write-only keys,
+URL rejection, admin-only access and 503 without a master key.
+
+### M8.4a limits
+
+- Only the OpenAI-compatible protocol; Anthropic is M8.4b. Private-network endpoints are refused.
+- Models cannot yet be updated, rotated or deactivated through the API (rotation = register anew
+  and reassign). The master key has no rotation procedure yet.
+- `Run-FactoryApi.ps1`/`Run-FactoryWorker.ps1` do not provision a master key; operators set
+  `Secrets:MasterKey` themselves.
+- Verification calls are not metered; customer-declared prices are trusted as declared.

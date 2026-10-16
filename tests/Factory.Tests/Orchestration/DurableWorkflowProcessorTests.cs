@@ -180,6 +180,29 @@ public class DurableWorkflowProcessorTests
         Assert.Equal(["continue", "stop"], queue.Decision.Value.Options);
     }
 
+    private sealed class Resolver(Func<Factory.Core.Tenancy.ResolvedModel> resolve) : IModelResolver
+    {
+        public Task<Factory.Core.Tenancy.ResolvedModel> ResolveAsync(ClaimedStep step, byte[] leaseToken, CancellationToken ct) => Task.FromResult(resolve());
+    }
+
+    [Fact]
+    public async Task UnusableOrFailingCustomerModelsWaitForTheCustomerInsteadOfFallingBack()
+    {
+        var unavailable = new Queue { Next = Step(StepKind.Analysis) };
+        Assert.Equal(StepOutcome.Suspended, await new DurableWorkflowProcessor(unavailable,
+            new Resolver(() => throw new OrchestrationException(OrchestrationError.Unavailable))).ProcessNextAsync("w", default));
+        Assert.Equal("customer_model_unavailable", unavailable.Decision!.Value.Reason);
+        var failing = new Queue { Next = Step(StepKind.Analysis) }; var customer = new Provider { Throw = true };
+        Assert.Equal(StepOutcome.Suspended, await new DurableWorkflowProcessor(failing,
+            new Resolver(() => new(customer, null, CustomerHosted: true))).ProcessNextAsync("w", default));
+        Assert.Equal(("customer_model_unavailable", (string?)null), (failing.Decision!.Value.Reason, failing.Failure));
+        Assert.Equal(1, customer.Calls);
+        // The same failure on the Factory's own model is an ordinary step failure.
+        var factory = new Queue { Next = Step(StepKind.Analysis) };
+        await new DurableWorkflowProcessor(factory, new Resolver(() => new(new Provider { Throw = true }, null, false))).ProcessNextAsync("w", default);
+        Assert.Equal("generation_failed", factory.Failure);
+    }
+
     [Fact]
     public void InputEstimateIsConservativeForNonAsciiText()
     {
@@ -233,6 +256,8 @@ public class DurableWorkflowProcessorTests
             if (RecordFails) throw new OrchestrationException(OrchestrationError.OutcomeUnknown);
             Calls.Add(call); return Task.CompletedTask;
         }
+        public Task<Factory.Core.Tenancy.ModelEndpoint?> GetModelEndpointAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default)
+            => Task.FromResult<Factory.Core.Tenancy.ModelEndpoint?>(null);
         internal OrchestrationError? ReserveError; internal List<(ModelIdentity Model, int Input, int Output, Guid Id)> Reservations { get; } = [];
         internal (string Reason, IReadOnlyList<string> Options)? Decision;
         public Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens, CancellationToken ct = default)

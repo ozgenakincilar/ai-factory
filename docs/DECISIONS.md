@@ -287,6 +287,19 @@ production. Durable runs are the only production generation path; regeneration o
 work item moved to `POST /api/projects/{projectId}/work-items/{workItemId}/runs` (same strong-ETag
 precondition, next case version, stale publication instead of overwrite).
 
+## Customer-provided models — M8.4a (2026-10-16)
+
+- The planned `ISecretStore` is realized as `ISecretProtector` (AES-256-GCM with context-bound
+  authenticated data); ciphertext lives in the registry row, the master key only in configuration.
+  Trade-off: no separate secret table, and a Key Vault implementation can replace the protector.
+- No restriction on which customer model may be used (user direction); weaker or unverified
+  capability is shown and requires explicit acceptance instead of being blocked.
+- No silent fallback: an unusable customer model becomes a `customer_model_unavailable` decision,
+  so customer data never reaches a Factory model without the customer's choice.
+- Egress is checked at connect time against every resolved address (SSRF and DNS-rebinding
+  defence); private-network endpoints stay out of scope until a separate mechanism is approved.
+- Each run snapshots its model at submission, so reassignment never changes a running workflow.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

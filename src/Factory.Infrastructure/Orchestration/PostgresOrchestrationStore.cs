@@ -16,8 +16,39 @@ namespace Factory.Infrastructure.Orchestration;
 
 // One instance per database role: the API uses the lifecycle runtime (submit/read only);
 // the worker uses the orchestration worker role (claim/renew/complete/fail/publish only).
-public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore
+public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore, IModelRegistryStore
 {
+    public Task<RegisteredModel> RegisterAsync(TrustedIdentity actor, string organizationId, Guid id, ModelRegistration registration, byte[] encryptedApiKey,
+        CancellationToken ct = default)
+        => Read<RegisteredModel>("register_model", actor, organizationId, ct, "tenancy", P("id", id), P("name", registration.Name),
+            P("protocol", registration.Protocol.ToString()), P("baseurl", registration.BaseUrl), P("model", registration.Model),
+            P("ciphertext", encryptedApiKey), P("inputprice", registration.InputMicrosPerMillion, NpgsqlDbType.Bigint),
+            P("outputprice", registration.OutputMicrosPerMillion, NpgsqlDbType.Bigint));
+
+    public Task<IReadOnlyList<RegisteredModel>> ListAsync(TrustedIdentity actor, string organizationId, CancellationToken ct = default)
+        => Read<IReadOnlyList<RegisteredModel>>("list_models", actor, organizationId, ct, "tenancy");
+
+    public Task<ModelEndpoint> GetEndpointAsync(TrustedIdentity actor, string organizationId, Guid modelId, CancellationToken ct = default)
+        => Read<ModelEndpoint>("model_endpoint", actor, organizationId, ct, "tenancy", P("model", modelId));
+
+    public Task<RegisteredModel> RecordVerificationAsync(TrustedIdentity actor, string organizationId, Guid modelId, ModelVerificationStatus status,
+        bool? structuredOutput, CancellationToken ct = default)
+        => Read<RegisteredModel>("record_verification", actor, organizationId, ct, "tenancy", P("model", modelId), P("status", status.ToString()),
+            P("structured", structuredOutput, NpgsqlDbType.Boolean));
+
+    public Task<ProjectModelAssignment> AssignAsync(TrustedIdentity actor, string projectId, Guid? modelId, bool acceptCapabilityRisk,
+        CancellationToken ct = default)
+        => Read<ProjectModelAssignment>("assign_model", actor, projectId, ct, "tenancy", P("model", modelId, NpgsqlDbType.Uuid),
+            P("accept", acceptCapabilityRisk));
+
+    public async Task<ModelEndpoint?> GetModelEndpointAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default)
+    {
+        var json = await Call("SELECT orchestration.model_for_attempt(@attempt,@token)::text", ct, P("attempt", attemptId), P("token", leaseToken));
+        if (json is null) return null;
+        try { return JsonSerializer.Deserialize<ModelEndpoint>(json, Json) ?? throw new OrchestrationException(OrchestrationError.Integrity); }
+        catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
+    }
+
     public Task<OrganizationUsage> GetOrganizationUsageAsync(TrustedIdentity actor, string organizationId, DateTimeOffset from, DateTimeOffset to,
         CancellationToken ct = default)
         => string.IsNullOrWhiteSpace(organizationId) || organizationId.Length > 210
@@ -207,7 +238,7 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
                     "P6009" => OrchestrationError.Conflict, "P6029" => OrchestrationError.Capacity,
                     "P7010" => OrchestrationError.LeaseLost, "22023" => OrchestrationError.InvalidCommand,
                     "P7020" => OrchestrationError.BudgetExceeded, "P7021" => OrchestrationError.PriceUnknown,
-                    "P6012" => OrchestrationError.StaleRevision,
+                    "P6012" => OrchestrationError.StaleRevision, "P7030" => OrchestrationError.CapabilityUnverified,
                     var code when code.StartsWith("23", StringComparison.Ordinal) || code.StartsWith("22", StringComparison.Ordinal) => OrchestrationError.Integrity,
                     _ => OrchestrationError.OutcomeUnknown
                 });

@@ -7,13 +7,18 @@ public sealed class OpenAiModelProvider : IModelProvider
 {
     private readonly ChatClient _client;
     private readonly string _model;
+    private readonly string _provider;
 
+    // providerLabel names the usage owner: "openai" for the Factory account, "customer:<id>" for
+    // a customer-registered OpenAI-compatible endpoint.
     public OpenAiModelProvider(
         ChatClient client,
-        string model)
+        string model,
+        string providerLabel = "openai")
     {
         _client = client;
         _model = model;
+        _provider = providerLabel;
     }
 
     public async Task<ModelResponse> GenerateAsync(
@@ -44,7 +49,7 @@ public sealed class OpenAiModelProvider : IModelProvider
 
         // Every returned completion is billed, including refusals and partial output.
         var usage = completion.Usage is { } reported
-            ? new ModelUsage("openai", string.IsNullOrWhiteSpace(completion.Model) ? _model : completion.Model,
+            ? new ModelUsage(_provider, string.IsNullOrWhiteSpace(completion.Model) ? _model : completion.Model,
                 reported.InputTokenCount, reported.OutputTokenCount)
             : null;
 

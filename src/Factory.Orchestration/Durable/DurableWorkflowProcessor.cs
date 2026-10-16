@@ -14,9 +14,18 @@ public enum StepOutcome { Idle, Completed, Failed, Released, Suspended }
 // unfinished step, which can repeat its provider call (not exactly-once).
 // With a model identity, every call is reserved against budgets before it is made; an exceeded
 // budget or an unpriced model under a budget parks the step for a human decision.
-public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider provider, ModelIdentity? model = null)
+// The resolver picks the run's model: the Factory default, or the customer model snapshotted on the
+// run. A customer model that cannot be reached is never silently replaced by a Factory model.
+public sealed class DurableWorkflowProcessor
 {
     internal static readonly string[] BudgetOptions = ["continue", "stop"];
+    private readonly IStepQueue queue;
+    private readonly IModelResolver resolver;
+
+    public DurableWorkflowProcessor(IStepQueue queue, IModelResolver resolver) { this.queue = queue; this.resolver = resolver; }
+
+    public DurableWorkflowProcessor(IStepQueue queue, IModelProvider provider, ModelIdentity? model = null)
+        : this(queue, new RegistryModelResolver(queue, provider, model, null)) { }
 
     internal TimeSpan Heartbeat { get; init; } = TimeSpan.FromSeconds(DurableWorkflowLimits.HeartbeatSeconds);
     internal TimeSpan StepTimeout { get; init; } = TimeSpan.FromSeconds(DurableWorkflowLimits.StepSeconds);
@@ -43,25 +52,28 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
 
     private async Task<StepOutcome> ExecuteAsync(ClaimedStep step, byte[] token, CancellationTokenSource execution, CancellationToken stopping)
     {
-        // Every provider call of this attempt is reserved (when a model identity is configured)
-        // and metered, whatever its outcome.
-        var metered = new MeteredProvider(provider, call => Record(step.AttemptId, token, call),
-            model is null ? null : (input, output) => queue.ReserveCostAsync(step.AttemptId, token, model, input, output, CancellationToken.None));
+        Factory.Core.Tenancy.ResolvedModel? resolved = null;
         try
         {
+            if (step.Kind != StepKind.Publication) resolved = await resolver.ResolveAsync(step, token, CancellationToken.None);
+            // Every provider call of this attempt is reserved (when a model identity is known)
+            // and metered, whatever its outcome.
+            var identity = resolved?.Identity;
+            var metered = resolved is null ? null : new MeteredProvider(resolved.Provider, call => Record(step.AttemptId, token, call),
+                identity is null ? null : (input, output) => queue.ReserveCostAsync(step.AttemptId, token, identity, input, output, CancellationToken.None));
             var request = new AgentRequest(step.Request.ProjectId, step.Request.Task, step.Request.Context,
                 step.Request.ConfirmedRequirements?.ToArray());
             switch (step.Kind)
             {
                 case StepKind.Analysis:
-                    var analysis = await new AnalystAgent(metered).ExecuteAsync(request, execution.Token);
+                    var analysis = await new AnalystAgent(metered!).ExecuteAsync(request, execution.Token);
                     if (!analysis.Success) return await Fail(Code(analysis.FailureKind));
                     await queue.CompleteAnalysisAsync(step.AttemptId, token, analysis.Analysis!, CancellationToken.None);
                     return StepOutcome.Completed;
                 case StepKind.Architecture:
                     if (step.Analysis is null) throw new OrchestrationException(OrchestrationError.Integrity);
                     if (step.Analysis.FunctionalRequirements.Count == 0) return await Fail("no_requirements_for_architecture");
-                    var proposal = await new ArchitectAgent(metered).ExecuteAsync(request with { Analysis = step.Analysis }, execution.Token);
+                    var proposal = await new ArchitectAgent(metered!).ExecuteAsync(request with { Analysis = step.Analysis }, execution.Token);
                     if (!proposal.Success) return await Fail(Code(proposal.FailureKind));
                     await queue.CompleteArchitectureAsync(step.AttemptId, token, proposal.Architecture!, CancellationToken.None);
                     return StepOutcome.Completed;
@@ -90,18 +102,16 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
         {
             return await Fail("generation_timeout");
         }
-        catch (OrchestrationException ex) when (ex.Error is OrchestrationError.BudgetExceeded or OrchestrationError.PriceUnknown)
+        catch (OrchestrationException ex) when (ex.Error is OrchestrationError.BudgetExceeded or OrchestrationError.PriceUnknown
+            or OrchestrationError.Unavailable)
         {
             // No provider call was made. The customer decides; nothing continues automatically.
-            try
+            return await Suspend(ex.Error switch
             {
-                await queue.RequestDecisionAsync(step.AttemptId, token,
-                    ex.Error == OrchestrationError.BudgetExceeded ? "budget_exceeded" : "model_price_unknown", BudgetOptions, CancellationToken.None);
-                return StepOutcome.Suspended;
-            }
-            catch (OrchestrationException wait) when (wait.Error is OrchestrationError.LeaseLost or OrchestrationError.OutcomeUnknown
-                or OrchestrationError.TransactionAborted)
-            { return StepOutcome.Released; }
+                OrchestrationError.BudgetExceeded => "budget_exceeded",
+                OrchestrationError.PriceUnknown => "model_price_unknown",
+                _ => "customer_model_unavailable"
+            });
         }
         catch (OrchestrationException ex) when (ex.Error is OrchestrationError.LeaseLost or OrchestrationError.OutcomeUnknown
             or OrchestrationError.TransactionAborted)
@@ -111,8 +121,18 @@ public sealed class DurableWorkflowProcessor(IStepQueue queue, IModelProvider pr
         }
         catch (Exception ex) when (ex is not OrchestrationException)
         {
+            // A failing customer endpoint is the customer's to fix or stop; never a silent fallback.
+            if (resolved?.CustomerHosted == true) return await Suspend("customer_model_unavailable");
             // Provider/SDK failures: static code only, no message or payload.
             return await Fail("generation_failed");
+        }
+
+        async Task<StepOutcome> Suspend(string reason)
+        {
+            try { await queue.RequestDecisionAsync(step.AttemptId, token, reason, BudgetOptions, CancellationToken.None); return StepOutcome.Suspended; }
+            catch (OrchestrationException wait) when (wait.Error is OrchestrationError.LeaseLost or OrchestrationError.OutcomeUnknown
+                or OrchestrationError.TransactionAborted)
+            { return StepOutcome.Released; }
         }
 
         async Task<StepOutcome> Fail(string code)

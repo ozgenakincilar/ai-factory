@@ -23,6 +23,8 @@ GRANT UPDATE ("Status","FailureCode","WorkItemId","UpdatedAt","CancelledBy","Can
 GRANT UPDATE ("Status","Choice","DecidedBy","DecidedAt") ON orchestration."StepDecisions" TO factory_lifecycle_guard;
 GRANT SELECT, INSERT ON orchestration."ModelCalls" TO factory_lifecycle_guard;
 GRANT SELECT ON orchestration."ModelPrices", orchestration."Budgets" TO factory_lifecycle_guard;
+-- Customer-declared prices are written only by tenancy.register_model.
+GRANT INSERT ON orchestration."ModelPrices" TO factory_lifecycle_guard;
 GRANT SELECT, INSERT ON orchestration."CostReservations" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Attempts","Output") ON orchestration."WorkflowSteps" TO factory_lifecycle_guard;
 GRANT UPDATE ("Outcome","FailureCode","FinishedAt","LeaseExpiresAt") ON orchestration."StepAttempts" TO factory_lifecycle_guard;
@@ -44,7 +46,8 @@ GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(u
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]),
     orchestration.record_model_call(uuid,bytea,text,text,integer,integer,integer,text,uuid),
-    orchestration.reserve_cost(uuid,bytea,text,text,integer,integer) TO factory_orchestration_worker;
+    orchestration.reserve_cost(uuid,bytea,text,text,integer,integer),
+    orchestration.model_for_attempt(uuid,bytea) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

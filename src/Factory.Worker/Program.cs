@@ -25,9 +25,16 @@ builder.Services.AddSingleton<IModelProvider>(new OpenAiModelProvider(new ChatCl
         RetryPolicy = new System.ClientModel.Primitives.ClientRetryPolicy(0),
         NetworkTimeout = TimeSpan.FromSeconds(90)
     }), model));
+// Customer models need the master key (Secrets:MasterKey) to decrypt their credential and the
+// endpoint egress policy. Without the key, runs assigned to customer models wait for a decision.
+var protector = Factory.Infrastructure.Security.AesGcmSecretProtector.FromConfiguration(builder.Configuration["Secrets:MasterKey"]);
+var policy = Factory.Infrastructure.Security.ModelEndpointPolicy.FromConfiguration(
+    builder.Configuration.GetValue<bool>(Factory.Infrastructure.Security.ModelEndpointPolicy.Setting),
+    builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"));
 // The configured identity prices budget reservations before each call.
-builder.Services.AddSingleton(sp => new DurableWorkflowProcessor(sp.GetRequiredService<IStepQueue>(), sp.GetRequiredService<IModelProvider>(),
-    new ModelIdentity("openai", model)));
+builder.Services.AddSingleton(sp => new DurableWorkflowProcessor(sp.GetRequiredService<IStepQueue>(),
+    new RegistryModelResolver(sp.GetRequiredService<IStepQueue>(), sp.GetRequiredService<IModelProvider>(), new ModelIdentity("openai", model),
+        protector is null ? null : new CustomerModelProviderFactory(protector, policy))));
 builder.Services.AddHostedService<WorkflowWorkerService>();
 
 builder.Build().Run();
