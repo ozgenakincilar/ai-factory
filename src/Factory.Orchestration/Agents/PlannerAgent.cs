@@ -40,6 +40,9 @@ public sealed class PlannerAgent(IModelProvider modelProvider) : IAgent
             - Keys are exactly P1, P2, ... in order, without gaps.
             - requirementIds may ONLY contain functional requirement IDs from the analysis. Every
               functional requirement must appear in at least one part. Do not invent requirements.
+            - EVERY part must list at least one requirement ID. Never create a part for anything
+              without a requirement ID: open questions, assumptions, risks and future work are not
+              parts. If the analysis has one requirement, produce exactly one part.
             - dependsOn lists keys of EARLIER parts whose design this part needs; empty if none.
               Parts without dependencies on each other are designed in parallel.
             - complexity is low, medium or high: how hard the part's design is.

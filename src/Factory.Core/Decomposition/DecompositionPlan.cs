@@ -42,6 +42,8 @@ public static class DecompositionJson
         return options;
     }
 
+    // minItems 1 (supported by OpenAI strict mode and, as 0 or 1, by Anthropic) keeps parts traceable:
+    // live samples showed parts without requirements for open questions or future work.
     public static ModelOutputSchema OutputSchema { get; } = new("decomposition_plan", """
         {
           "type": "object",
@@ -49,13 +51,14 @@ public static class DecompositionJson
             "summary": { "type": "string" },
             "parts": {
               "type": "array",
+              "minItems": 1,
               "items": {
                 "type": "object",
                 "properties": {
                   "key": { "type": "string" },
                   "title": { "type": "string" },
                   "scope": { "type": "string" },
-                  "requirementIds": { "type": "array", "items": { "type": "string" } },
+                  "requirementIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
                   "complexity": { "type": "string", "enum": ["low", "medium", "high"] },
                   "importance": { "type": "string", "enum": ["normal", "high"] },
                   "dependsOn": { "type": "array", "items": { "type": "string" } }

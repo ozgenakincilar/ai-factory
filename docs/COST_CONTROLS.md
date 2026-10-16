@@ -4,8 +4,8 @@ Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#mil
 **M8.1 usage metering committed and pushed as `7da963f`; M8.2 tenancy as `4c7789d`; M8.3 budgets,
 retired synchronous generation and durable regeneration as `2564a85`; M8.4a customer-provided
 OpenAI-compatible models as `c7eb11d`; M8.4b Anthropic provider as `8d0f3d6`; M8.5a model routing
-policy as `fe83818`. M8.5b request decomposition with plan approval and M8.5c parallel parts are
-implemented as a local candidate** ([M8.5b/c](#m85bm85c--request-decomposition-and-parallel-parts)).
+policy as `fe83818`; M8.5b/c request decomposition with plan approval and parallel parts as
+`2b29be2`, followed by a Planner fix from live evidence** ([M8.5b/c](#m85bm85c--request-decomposition-and-parallel-parts)).
 This document describes inspected code and executed local verification, not production readiness.
 
 ## M8.1 — Usage metering
@@ -493,12 +493,41 @@ any part; an invalid plan failing without a decision; a failing part ending its 
 database plan revalidation, approval without an "approve" decision refused, plan access limited to
 the project and role separation; HTTP selection and the plan endpoint.
 
+### Live verification and Planner fix — 2026-10-16
+
+Under the user's delegated authority, `gpt-4o-mini` (OpenAI key from User Secrets, SDK retries off),
+synthetic project in `factory_m7_verify_20261015` with a USD 0.25 project budget, the built
+`Factory.Worker.exe` (restricted worker login, concurrency 2); submission, plan read and the
+approval decision went through the runtime role's database functions (the API was not involved).
+
+1. Run `f2f7de31-ffed-4a1a-b857-4151013fe61b` (code of `2b29be2`): Analysis succeeded; Planning failed
+   `invalid_output`; not retried. 2 calls, 467 micro-USD.
+2. Diagnosis on the stored analysis (one requirement, USER-1) with a scratch probe calling the
+   Planner directly: 2 of 5 plans had parts with no requirement ids (open questions, future work),
+   which the validator correctly refuses. After a prompt rule (every part needs a requirement; open
+   questions and future work are not parts): 7 of 8 valid. After adding `minItems: 1` for `parts` and
+   `requirementIds` to the strict schema (documented for OpenAI strict mode; Anthropic accepts 0 or
+   1): 8 of 8 valid. Two of those eight still added a speculative second part tied to USER-1 — valid
+   and traceable; the approval gate exists for such plans. 21 probe calls, about 0.005 USD.
+3. Run `b55cbfcd-58f6-4c7a-987a-bec8e6508f3a` with the fix: Analysis → Planning (one part, low/normal)
+   → `plan_approval` decided `approve` → part on Economy → merge → Publication, **Succeeded**,
+   version 1 published (content hash `3215282039…99f3`). 3 calls, 2477 input / 991 output tokens,
+   968 micro-USD. Routes: Analysis Standard, Planning Strong, P1 Economy (all mapped to `gpt-4o-mini`
+   in this single-model worker). Worker logs: 22 lines, no errors, no credential-like strings.
+4. Full suite after the fix: build 0 warnings, 0 errors; **881 passed, 0 failed, 0 skipped**,
+   including four live Keycloak cases. TRX (ignored):
+   `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_09_16_25.trx`, SHA-256
+   `6c1e29d4b5d72a2b10aec15580d5fa26f1815822b2eb2ec96750679166f04042`.
+
+These are small samples on one simple request, not a reliability measurement; parallel parts were
+not exercised live (the plan had one part) and remain verified by the PostgreSQL tests.
+
 ### M8.5b/c limits
 
 - Durable regeneration still runs `analysis-architecture-v1` from the API (the database accepts
   both versions).
 - The customer can approve or stop a plan, not edit it. Parts run only the Architect, not the Analyst.
-- No live run of the Planner or of parts has been verified; real model plans may be rejected more
-  often than the deterministic test model's.
+- Live evidence covers one successful single-part run; real plans can still be rejected, and a
+  rejection fails the run without automatic retry.
 - A worker claim skips a run whose row another claim holds at that instant; it finds the run on its
   next poll (parallelism is eventual, not instantaneous).
