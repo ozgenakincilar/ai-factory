@@ -226,8 +226,7 @@ public class DevelopmentJobTests
     {
         public Task<IWorkspaceSession> StartAsync(IReadOnlyList<TemplateFile> files, CancellationToken ct = default) => Task.FromResult<IWorkspaceSession>(new FakeSession());
         public Task<SandboxReport> RunAsync(IReadOnlyList<TemplateFile> workspace, IReadOnlyList<SandboxStep> steps, CancellationToken ct = default)
-            => Task.FromResult(new SandboxReport("sha256:" + new string('e', 64), TemplateContent.Hash(TemplateContent.Normalize(workspace)), SandboxLimits.Default,
-                [new StepResult("dotnet-test", StepOutcome.Passed, 0, TimeSpan.Zero, "Passed!", false)], SandboxOutcome.Passed, null, DateTimeOffset.UnixEpoch, TimeSpan.Zero));
+            => Task.FromResult(DeveloperScripts.Report(workspace, SandboxOutcome.Passed));
         public Task<WorkspaceDiff> CreateAsync(IReadOnlyList<TemplateFile> baseFiles, IReadOnlyList<TemplateFile> finalFiles, CancellationToken ct = default)
             => Task.FromResult(new WorkspaceDiff(new string('1', 40), new string('2', 40), "diff --git a/src b/src", new string('3', 64)));
     }
@@ -259,6 +258,7 @@ public class DevelopmentJobTests
         Assert.Equal(new string('3', 64), evidence.DiffSha256);
         Assert.Equal("src/SampleShop.Domain/Tasks/TaskItem.cs", evidence.Changes.Single().Path);
         Assert.Equal(2, evidence.Calls.Count);
+        Assert.Contains(evidence.Checks!, c => c.Name == "layers" && c.Status == CheckStatus.Passed);
 
         // A job whose model never edits anything ends as not finished, without a diff.
         var (second, secondHash) = await Approved(f);

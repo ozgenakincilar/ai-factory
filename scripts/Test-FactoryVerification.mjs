@@ -69,10 +69,10 @@ try {
   if (status !== 'passed') throw new Error('verification_' + status);
   step('the worker finished the sandbox run and the list updated to passed');
   await evaluate(`document.querySelector('.verifications tbody tr a').click()`);
-  await until('evidence', `document.body.textContent.includes('Evidence SHA-256') && document.querySelectorAll('table tbody tr').length >= 6`);
+  await until('evidence', `document.body.textContent.includes('Evidence SHA-256') && document.querySelectorAll('table tbody tr').length >= 7`);
   const detail = await evaluate(`({ steps: [...document.querySelectorAll('table tbody tr')].map(r => r.children[0].textContent.trim() + '=' + r.children[1].textContent.trim()),
     hash: document.querySelector('dd code')?.textContent.trim() })`);
-  if (detail.steps.length !== 6 || detail.steps.some(s => !s.endsWith('=passed')) || !/^[0-9a-f]{64}$/.test(detail.hash ?? '')) throw new Error('unexpected_evidence');
+  if (detail.steps.length !== 7 || detail.steps.some(s => !s.endsWith('=passed')) || !/^[0-9a-f]{64}$/.test(detail.hash ?? '')) throw new Error('unexpected_evidence');
   step(`evidence page: ${detail.steps.join(', ')}; evidence SHA-256 ${detail.hash.slice(0, 12)}…`);
   console.log('VERIFICATION_E2E_PASSED');
 } catch (error) {

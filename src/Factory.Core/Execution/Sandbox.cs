@@ -53,6 +53,8 @@ public interface ISandbox
 
 public static class StarterVerification
 {
+    public const string ReportDirectory = SandboxStep.Root + "/.factory-results";
+
     // Offline verification of an application generated from the starter template. NuGet's
     // vulnerability audit needs the network, so it is off here; dependency scanning is a separate,
     // networked step (M11).
@@ -63,10 +65,13 @@ public static class StarterVerification
         [
             new("dotnet-restore", ["dotnet", "restore", solution, "-p:NuGetAudit=false"]),
             new("dotnet-build", ["dotnet", "build", solution, "--no-restore", "-nodeReuse:false", "-p:NuGetAudit=false"]),
-            new("dotnet-test", ["dotnet", "test", solution, "--no-build"]),
+            new("dotnet-test", ["dotnet", "test", solution, "--no-build", "--logger", "trx;LogFileName=factory.trx", "--results-directory", ReportDirectory]),
             new("npm-ci", ["npm", "ci", "--offline", "--ignore-scripts"], SandboxStep.Root + "/web"),
             new("web-test", ["npx", "--no-install", "ng", "test", "--watch=false"], SandboxStep.Root + "/web"),
             new("web-build", ["npx", "--no-install", "ng", "build"], SandboxStep.Root + "/web"),
+            // M11.1: a Factory command extracts the test counters and per-test outcomes from the report.
+            new("test-report", ["sh", "-c", "f=" + ReportDirectory + "/factory.trx; grep -o '<Counters [^>]*>' \"$f\" && " +
+                "grep -o '<UnitTestResult [^>]*>' \"$f\" | grep -o 'testName=\"[^\"]*\"\\|outcome=\"[^\"]*\"'"]),
         ];
     }
 }

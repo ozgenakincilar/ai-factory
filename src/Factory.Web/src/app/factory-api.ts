@@ -60,6 +60,7 @@ export interface DevelopmentSummary {
   jobId: string; caseId: string; artifactVersion: number; applicationName: string; status: DevelopmentStatus;
   failureCode: string | null; costMicros: number | null; createdAt: string; updatedAt: string;
 }
+export interface VerificationCheck { name: string; status: 'passed' | 'failed' | 'warning'; blocking: boolean; detail: string; }
 export interface DevelopmentChange { path: string; kind: 'added' | 'modified' | 'deleted'; requirementIds: string[]; }
 export interface DevelopmentCall { turn: number; status: string; model: string | null; inputTokens: number | null; outputTokens: number | null; reservedMicros: number; costMicros: number; }
 export interface DevelopmentEvidence {
@@ -67,6 +68,7 @@ export interface DevelopmentEvidence {
   applicationName: string; model: string; status: DevelopmentStatus; failureCode: string | null; turns: number; actions: number;
   costMicros: number; calls: DevelopmentCall[]; changes: DevelopmentChange[]; baseCommit: string | null; finalCommit: string | null;
   diff: string | null; diffSha256: string | null; verification: SandboxReport | null; log: string[];
+  checks?: VerificationCheck[] | null; corrections?: number;
 }
 export interface DevelopmentView { job: DevelopmentSummary; evidence: DevelopmentEvidence | null; evidenceSha256: string | null; }
 export interface DevelopmentSubmission { jobId: string; status: DevelopmentStatus; replayed: boolean; }

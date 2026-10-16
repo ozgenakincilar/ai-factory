@@ -136,6 +136,18 @@ export class DevelopmentsPanel implements OnInit {
       @if (v.evidence; as e) {
         <p>{{ e.model }} · {{ e.turns }} turns · {{ e.actions }} actions · estimated USD {{ cost(e.costMicros) }}
           ({{ e.calls.length }} calls, {{ inputTokens() | number }} input / {{ outputTokens() | number }} output tokens)</p>
+        @if (e.checks?.length) {
+          <h2>Factory checks</h2>
+          <p class="meta">Established by the Factory itself (sandbox exit codes, test report, source scan), not by the agent{{ e.corrections ? '; ' + e.corrections + ' correction(s) after failed checks' : '' }}.</p>
+          <table class="checks">
+            <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+            <tbody>
+              @for (c of e.checks; track c.name) {
+                <tr><td>{{ c.name }}{{ c.blocking ? '' : ' (advisory)' }}</td><td><span class="status" [attr.data-status]="c.status">{{ c.status }}</span></td><td>{{ c.detail }}</td></tr>
+              }
+            </tbody>
+          </table>
+        }
         <h2>Changes</h2>
         <table class="changes">
           <thead><tr><th>File</th><th>Change</th><th>Requirements</th></tr></thead>
@@ -178,7 +190,8 @@ export class DevelopmentsPanel implements OnInit {
     pre.diff { font-size: 0.85em; background: var(--surface); border: 1px solid var(--border); padding: 8px; overflow: auto; max-height: 640px; }
     pre.diff span { display: block; white-space: pre; } .add { color: var(--ok); } .remove { color: var(--danger); } .hunk { color: var(--accent); }
     .file { font-weight: 600; } dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; } dd { margin: 0; overflow-wrap: anywhere; }
-    .status[data-status="verified"], .status[data-status="passed"] { color: var(--ok); }
+    .status[data-status="verified"], .status[data-status="passed"] { color: var(--ok); } .status[data-status="failed"] { color: var(--danger); }
+    .status[data-status="warning"] { color: var(--warn); }
     .status[data-status="queued"], .status[data-status="running"], .status[data-status="skipped"] { color: var(--warn); }`,
 })
 export class DevelopmentPage implements OnInit {

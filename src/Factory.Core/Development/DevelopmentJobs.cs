@@ -37,10 +37,12 @@ public sealed record ClaimedDevelopment(Guid JobId, string ProjectId, Guid CaseI
 public sealed record EvidenceCall(int Turn, string Status, string? Model, int? InputTokens, int? OutputTokens, long ReservedMicros, long CostMicros);
 
 // Evidence format 1: everything a reviewer needs to judge the change, in one immutable envelope.
+// M11.1 adds the Factory's verification checks and the number of corrections (absent in older evidence).
 public sealed record DevelopmentEvidence(int FormatVersion, Guid JobId, string ProjectId, Guid CaseId, int ArtifactVersion, string ArtifactSha256,
     string TemplateId, string TemplateVersion, string TemplateSha256, string ApplicationName, string Model, DevelopmentJobStatus Status,
     string? FailureCode, int Turns, int Actions, long CostMicros, IReadOnlyList<EvidenceCall> Calls, IReadOnlyList<FileChange> Changes,
-    string? BaseCommit, string? FinalCommit, string? Diff, string? DiffSha256, SandboxReport? Verification, IReadOnlyList<string> Log);
+    string? BaseCommit, string? FinalCommit, string? Diff, string? DiffSha256, SandboxReport? Verification, IReadOnlyList<string> Log,
+    IReadOnlyList<VerificationCheck>? Checks = null, int Corrections = 0);
 
 public static class DevelopmentJobLimits
 {

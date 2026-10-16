@@ -60,6 +60,9 @@ describe('DevelopmentPage', () => {
           startedAt: '2026-10-16T10:00:00Z', duration: '00:00:20', steps: [{ name: 'dotnet-test', outcome: 'passed', exitCode: 0, duration: '00:00:03', output: '', outputTruncated: false }],
           limits: { cpus: 2, memoryMb: 4096, pids: 1024, workspaceMb: 1024, tempMb: 512, stepTimeout: '00:10:00', jobTimeout: '00:20:00', outputBytes: 65536 } },
         log: ['turn 1: plan'],
+        checks: [{ name: 'required_tests', status: 'passed', blocking: true, detail: '10 of 10 tests passed, architecture tests included' },
+          { name: 'new_tests', status: 'warning', blocking: false, detail: 'the change adds no tests' }],
+        corrections: 1,
       },
     };
     TestBed.configureTestingModule({ imports: [DevelopmentPage], providers: [provideRouter([]),
@@ -74,5 +77,7 @@ describe('DevelopmentPage', () => {
     expect(element.textContent).toContain('0.0092');
     expect(element.textContent).toContain('dotnet-test');
     expect(element.textContent).toContain('e'.repeat(64));
+    expect(element.querySelector('.checks')?.textContent).toContain('new_tests (advisory)');
+    expect(element.textContent).toContain('1 correction(s) after failed checks');
   });
 });

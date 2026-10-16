@@ -67,8 +67,10 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
         var turn = 0;
         var webChanged = false;
         var npmReady = false;
+        var corrections = 0;
+        ChangeVerdict? verdict = null;
         DevelopmentResult Result(DevelopmentStatus status, string? failure, SandboxReport? verification = null) =>
-            new(status, failure, turn, actions, calls, workspace.Changes(), workspace.Files, verification, costs.SpentMicros, log);
+            new(status, failure, turn, actions, calls, workspace.Changes(), workspace.Files, verification, costs.SpentMicros, log, verdict, corrections);
 
         IWorkspaceSession session;
         try { session = await runner.StartAsync(workspace.BaseFiles, ct); }
@@ -104,10 +106,19 @@ public sealed class DeveloperAgent(IModelProvider model, IWorkspaceRunner runner
                     if (action.Kind == DeveloperActionKind.Finish)
                     {
                         log.Add("finish: " + Truncate(action.Summary, 300));
+                        // M11.1: the Factory's own verdict decides; the agent's summary is only its claim.
                         var report = await verifier.RunAsync(workspace.Files, StarterVerification.Steps(workspace.Name), ct);
-                        return report.Outcome == SandboxOutcome.Passed
-                            ? Result(DevelopmentStatus.Verified, null, report)
-                            : Result(DevelopmentStatus.VerificationFailed, report.FailureCode ?? "verification_failed", report);
+                        verdict = ChangeChecks.Evaluate(task, workspace, report, action.Summary);
+                        log.Add("verification: " + (verdict.Verified ? "verified" : verdict.FailureCode));
+                        if (verdict.Verified) return Result(DevelopmentStatus.Verified, null, report);
+                        // M11.2: blocking findings go back to the agent while turns and corrections remain.
+                        if (corrections >= limits.MaxCorrections || turn >= limits.MaxTurns)
+                            return Result(DevelopmentStatus.VerificationFailed, verdict.FailureCode, report);
+                        corrections++;
+                        var failed = report.Steps.FirstOrDefault(s => s.Outcome != StepOutcome.Passed);
+                        observations.Add($"[verification] NOT VERIFIED (correction {corrections} of {limits.MaxCorrections}). Fix these findings, " +
+                            "build, test and finish again:\n" + verdict.Findings + (failed is null ? "" : "\n" + Step(failed)));
+                        break;
                     }
                     string observation;
                     try

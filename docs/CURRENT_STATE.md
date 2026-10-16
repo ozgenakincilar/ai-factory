@@ -59,6 +59,11 @@ verification (USD 0.009). M10.3 (development jobs on approved review artifacts, 
 API, Develop panel and diff view) is verified with 986 passed, 23 web tests and a browser acceptance run
 in which the Developer Agent implemented StockFlow Product CRUD across the DDD layers and passed offline
 verification (USD 0.0645; total paid Developer spend USD 0.206 of USD 2); see [Developer Agent](DEVELOPER_AGENT.md).
+M11 decisions: pull requests to the new private repository `ozgenakincilar/stockflow`, a repository-scoped
+token entered by the user, the Factory never merges. M11.1 (Factory-established checks: sandbox, required
+architecture tests from the TRX report, layer scan, protected files; advisory coverage and tests) and
+M11.2 (correction loop, at most 2) are verified with 992 passed; see
+[Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md). M11.3 awaits the token.
 
 ## Milestone 8.1 current handoff
 
@@ -273,7 +278,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 9.3 | Committed/pushed verification jobs and immutable evidence, b95bf13 (937 passed), see TEMPLATES_AND_EXECUTION.md |
 | 10.1 | Committed/pushed developer workspace, sandbox session, Git snapshot, 80f3759 (967 passed), see DEVELOPER_AGENT.md |
 | 10.2 | Committed/pushed Developer Agent loop, a667e3c (977 passed), see DEVELOPER_AGENT.md |
-| 10.3 | Development jobs, evidence, Develop UI; StockFlow Product CRUD acceptance verified (986 passed), see DEVELOPER_AGENT.md |
+| 10.3 | Committed/pushed development jobs, evidence, Develop UI, 8846c67 (986 passed), see DEVELOPER_AGENT.md |
+| 11.1–11.2 | Verification checks and correction loop (992 passed), see VERIFICATION_AND_PULL_REQUESTS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

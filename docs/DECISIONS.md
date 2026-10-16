@@ -373,6 +373,19 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M11 GitHub target, credential and merge policy (2026-10-17, user decision)
+
+- Pull requests go to a **new private repository `ozgenakincilar/stockflow`** (created empty on
+  2026-10-17 with the user's gh session); the Factory repository is never a target. The Factory pushes
+  the deterministic generated base commit to `main` only while the repository is empty, and its changes
+  only to `factory/...` branches.
+- Credential: a **fine-grained token limited to that repository** (Contents and Pull requests: read and
+  write; Metadata: read), entered by the user into the worker's User Secrets, never in chat; the user's
+  broad gh login is not used by the Factory.
+- **The Factory never merges**; humans merge. GitHub Free offers no branch protection for private
+  repositories, so this is enforced by Factory code (no merge API calls, no pushes to `main` after the
+  base commit), not by GitHub; a paid plan or a public repository would allow server-side protection.
+
 ## M10.3 development jobs (2026-10-16, delegated)
 
 Taken under the user's delegated authority after "evet"; open to review.

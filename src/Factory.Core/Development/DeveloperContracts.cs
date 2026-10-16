@@ -16,7 +16,7 @@ public sealed record DevelopmentTask(string Task, AnalysisResult Analysis, Archi
 }
 
 public sealed record DevelopmentLimits(int MaxTurns, int MaxActionsPerTurn, int MaxActions, int MaxOutputTokens, int MaxPromptChars,
-    int MaxObservationChars, long CostCapMicros, int MaxKnownFileChars = 80_000)
+    int MaxObservationChars, long CostCapMicros, int MaxKnownFileChars = 80_000, int MaxCorrections = 2)
 {
     // USD 0.40 per job (user decision of 2026-10-16). The prompt bound covers task, history, the last
     // turn's results and the known files.
@@ -37,7 +37,7 @@ public sealed record DeveloperCall(int Turn, ModelResponseStatus Status, ModelUs
 
 public sealed record DevelopmentResult(DevelopmentStatus Status, string? FailureCode, int Turns, int Actions,
     IReadOnlyList<DeveloperCall> Calls, IReadOnlyList<FileChange> Changes, IReadOnlyList<TemplateFile> Files,
-    SandboxReport? Verification, long CostMicros, IReadOnlyList<string> Log);
+    SandboxReport? Verification, long CostMicros, IReadOnlyList<string> Log, ChangeVerdict? Verdict = null, int Corrections = 0);
 
 // Ports: the sandbox session the agent builds and tests in (M10.1 DockerWorkspaceSession behind it).
 public interface IWorkspaceSession : IAsyncDisposable

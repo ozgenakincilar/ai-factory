@@ -11,6 +11,24 @@ namespace Factory.Tests.Templates;
 
 internal static class DeveloperScripts
 {
+    // The test-report step output of a run where the template's tests (and extra) passed.
+    internal static string TestReportOutput(string app, int extraPassed = 0, string architectureOutcome = "Passed")
+    {
+        var tests = ChangeChecks.RequiredTests.Select(t => (Name: $"{app}.Tests.{t}", Outcome: architectureOutcome))
+            .Concat(Enumerable.Range(0, 3 + extraPassed).Select(i => (Name: $"{app}.Tests.Other.T{i}", Outcome: "Passed"))).ToList();
+        var failed = tests.Count(t => t.Outcome != "Passed");
+        return $"<Counters total=\"{tests.Count}\" executed=\"{tests.Count}\" passed=\"{tests.Count - failed}\" failed=\"{failed}\" error=\"0\" />\n" +
+            string.Join("\n", tests.Select(t => $"testName=\"{t.Name}\"\noutcome=\"{t.Outcome}\""));
+    }
+
+    internal static SandboxReport Report(IReadOnlyList<TemplateFile> workspace, SandboxOutcome outcome, string app = "SampleShop") =>
+        new("sha256:" + new string('a', 64), TemplateContent.Hash(TemplateContent.Normalize(workspace)), SandboxLimits.Default,
+            outcome == SandboxOutcome.Passed
+                ? [new StepResult("dotnet-test", StepOutcome.Passed, 0, TimeSpan.Zero, "Passed!", false),
+                   new StepResult(ChangeChecks.TestReportStep, StepOutcome.Passed, 0, TimeSpan.Zero, TestReportOutput(app, 2), false)]
+                : [new StepResult("dotnet-test", StepOutcome.Failed, 1, TimeSpan.Zero, "error CS0103: The name 'x' does not exist", false)],
+            outcome, outcome == SandboxOutcome.Passed ? null : "step_failed", DateTimeOffset.UnixEpoch, TimeSpan.Zero);
+
     internal static readonly DevelopmentTask Task = new("Add tasks to a list", ArchitectSamples.Request.Analysis!, ArchitectSamples.Proposal);
 
     internal static DeveloperAction Write(string path, string content, params string[] ids) => new(DeveloperActionKind.Write, path, content, null, ids, "write");
@@ -90,14 +108,15 @@ public class DeveloperAgentTests
             => session is null ? throw new SandboxUnavailableException("docker_unavailable") : Task.FromResult<IWorkspaceSession>(session);
     }
 
-    private sealed class FakeVerifier(SandboxOutcome outcome) : ISandbox
+    // Returns the given outcomes in order (the last one repeats).
+    private sealed class FakeVerifier(params SandboxOutcome[] outcomes) : ISandbox
     {
+        private int _next;
         public IReadOnlyList<TemplateFile>? Files;
         public Task<SandboxReport> RunAsync(IReadOnlyList<TemplateFile> workspace, IReadOnlyList<SandboxStep> steps, CancellationToken ct = default)
         {
             Files = workspace;
-            return Task.FromResult(new SandboxReport("sha256:" + new string('a', 64), TemplateContent.Hash(TemplateContent.Normalize(workspace)),
-                SandboxLimits.Default, [], outcome, outcome == SandboxOutcome.Passed ? null : "step_failed", DateTimeOffset.UnixEpoch, TimeSpan.Zero));
+            return Task.FromResult(DeveloperScripts.Report(workspace, outcomes[Math.Min(_next++, outcomes.Length - 1)]));
         }
     }
 
@@ -105,10 +124,11 @@ public class DeveloperAgentTests
     private static CostGuard Guard(long cap = 400_000) => new(750_000, 4_500_000, cap);
 
     private static (DeveloperAgent Agent, DevelopmentWorkspace Workspace, FakeSession Session, FakeVerifier Verifier) Create(ScriptedModel model,
-        DevelopmentLimits? limits = null, SandboxOutcome verification = SandboxOutcome.Passed, long cap = 400_000, bool sandbox = true)
+        DevelopmentLimits? limits = null, SandboxOutcome verification = SandboxOutcome.Passed, long cap = 400_000, bool sandbox = true,
+        SandboxOutcome[]? verifications = null)
     {
         var session = new FakeSession();
-        var verifier = new FakeVerifier(verification);
+        var verifier = new FakeVerifier(verifications ?? [verification]);
         return (new DeveloperAgent(model, new FakeRunner(sandbox ? session : null), verifier, Guard(cap), limits ?? DevelopmentLimits.Default),
             new DevelopmentWorkspace(DevelopmentWorkspaceTests.Application("SampleShop")), session, verifier);
     }
@@ -188,6 +208,34 @@ public class DeveloperAgentTests
     }
 
     [Fact]
+    public async Task AFailedVerification_IsReturnedToTheAgent_ThatCorrectsAndIsVerified()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;", "FR-1"),
+                new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done, all tests pass")),
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;\n", "FR-1"),
+                new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "fixed")));
+        var (agent, workspace, _, _) = Create(model, verifications: [SandboxOutcome.Failed, SandboxOutcome.Passed]);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.Verified, 1, 2), (result.Status, result.Corrections, result.Turns));
+        Assert.Contains("NOT VERIFIED (correction 1 of 2)", model.Prompts[1]);
+        Assert.Contains("BLOCKING sandbox: dotnet-test failed (exit 1)", model.Prompts[1]);
+        Assert.Contains("error CS0103", model.Prompts[1]);
+        Assert.Equal("fixed", result.Verdict!.AgentClaim);
+    }
+
+    [Fact]
+    public async Task VerificationKeepsFailing_EndsAfterTheCorrectionLimit()
+    {
+        var model = new ScriptedModel(DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "x", "FR-1"),
+            new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "all good")));
+        var (agent, workspace, _, _) = Create(model, verification: SandboxOutcome.Failed);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.VerificationFailed, "check_sandbox", 2, 3), (result.Status, result.FailureCode, result.Corrections, result.Turns));
+        Assert.Equal("all good", result.Verdict!.AgentClaim); // the claim is recorded, not trusted
+    }
+
+    [Fact]
     public async Task UnsafeOrUntracedEdits_AreRejected_AndReportedToTheModel()
     {
         var model = new ScriptedModel(
@@ -201,7 +249,7 @@ public class DeveloperAgentTests
             DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
         var (agent, workspace, session, _) = Create(model, verification: SandboxOutcome.Failed);
         var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
-        Assert.Equal((DevelopmentStatus.VerificationFailed, "step_failed"), (result.Status, result.FailureCode));
+        Assert.Equal((DevelopmentStatus.VerificationFailed, "check_sandbox"), (result.Status, result.FailureCode));
         Assert.Empty(result.Changes);
         Assert.Empty(session.Written);
         // Six actions, six rejections: two protected files, an unknown and a missing requirement, two unsafe paths.
@@ -289,7 +337,10 @@ public class DeveloperAgentSandboxTests
         var workspace = new DevelopmentWorkspace(DevelopmentWorkspaceTests.Application("SampleShop"));
         var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
         Assert.True(result.Status == DevelopmentStatus.Verified, string.Join("\n", model.Prompts.Skip(1)));
-        Assert.Equal(6, result.Verification!.Steps.Count(s => s.Outcome == StepOutcome.Passed));
+        Assert.Equal(7, result.Verification!.Steps.Count(s => s.Outcome == StepOutcome.Passed));
+        // M11.1: the Factory's own checks, all passed, with the architecture tests seen in the report.
+        Assert.True(result.Verdict!.Verified);
+        Assert.Contains(result.Verdict.Checks, c => c.Name == "required_tests" && c.Status == CheckStatus.Passed && c.Detail.Contains("8 of 8"));
         Assert.Contains("Passed!", result.Verification.Steps.Single(s => s.Name == "dotnet-test").Output);
         Assert.True(model.Prompts[1].Contains("dotnet-test: passed"), model.Prompts[1][^Math.Min(3000, model.Prompts[1].Length)..]);
         // The template's 6 tests plus the agent's 2.

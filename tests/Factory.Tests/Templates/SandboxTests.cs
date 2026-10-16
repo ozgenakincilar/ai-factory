@@ -64,7 +64,8 @@ public class SandboxConfigurationTests
     public void StarterVerificationRunsOfflineStepsForTheGeneratedSolution()
     {
         var steps = StarterVerification.Steps(ApplicationName.Create("StockFlow"));
-        Assert.Equal(["dotnet-restore", "dotnet-build", "dotnet-test", "npm-ci", "web-test", "web-build"], steps.Select(s => s.Name));
+        Assert.Equal(["dotnet-restore", "dotnet-build", "dotnet-test", "npm-ci", "web-test", "web-build", "test-report"], steps.Select(s => s.Name));
+        Assert.Contains("trx;LogFileName=factory.trx", steps[2].Arguments);
         Assert.Contains("StockFlow.slnx", steps[0].Arguments);
         Assert.Contains("-p:NuGetAudit=false", steps[0].Arguments);
         Assert.Contains("--offline", steps[3].Arguments);

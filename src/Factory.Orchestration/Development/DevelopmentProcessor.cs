@@ -86,7 +86,8 @@ public sealed class DevelopmentProcessor(IDevelopmentQueue queue, ITemplateCatal
             result.CostMicros,
             result.Calls.Select(c => new EvidenceCall(c.Turn, c.Status.ToString().ToLowerInvariant(), c.Usage?.Model, c.Usage?.InputTokens,
                 c.Usage?.OutputTokens, c.ReservedMicros, c.CostMicros)).ToList(),
-            result.Changes, diff?.BaseCommit, diff?.FinalCommit, diff?.Diff, diff?.DiffSha256, result.Verification, result.Log), ct);
+            result.Changes, diff?.BaseCommit, diff?.FinalCommit, diff?.Diff, diff?.DiffSha256, result.Verification, result.Log,
+            result.Verdict?.Checks, result.Corrections), ct);
         return DevelopmentOutcome.Completed;
     }
 
