@@ -1,0 +1,250 @@
+using System.Text.Json;
+using Factory.Core.Development;
+using Factory.Core.Execution;
+using Factory.Core.Models;
+using Factory.Core.Templates;
+using Factory.Infrastructure.Execution;
+using Factory.Orchestration.Development;
+using Factory.Tests.Architecture;
+
+namespace Factory.Tests.Templates;
+
+internal static class DeveloperScripts
+{
+    internal static readonly DevelopmentTask Task = new("Add tasks to a list", ArchitectSamples.Request.Analysis!, ArchitectSamples.Proposal);
+
+    internal static DeveloperAction Write(string path, string content, params string[] ids) => new(DeveloperActionKind.Write, path, content, null, ids, "write");
+    internal static DeveloperAction Act(DeveloperActionKind kind, string? path = null, string? text = null) => new(kind, path, null, text, [], null);
+    internal static string Turn(params DeveloperAction[] actions) => JsonSerializer.Serialize(new DeveloperTurn("plan", actions), DeveloperJson.Options);
+
+    internal const string TaskItem = """
+        using {0}.Domain.Common;
+
+        namespace {0}.Domain.Tasks;
+
+        public sealed class TaskItem : AggregateRoot<Guid>
+        {{
+            private TaskItem(Guid id, string title) : base(id) => Title = title;
+
+            public string Title {{ get; private set; }}
+
+            public static TaskItem Create(Guid id, string title) =>
+                string.IsNullOrWhiteSpace(title) ? throw new DomainException("task_title_required") : new TaskItem(id, title.Trim());
+        }}
+
+        """;
+
+    internal const string TaskItemTests = """
+        using {0}.Domain.Common;
+        using {0}.Domain.Tasks;
+
+        namespace {0}.Tests;
+
+        public class TaskItemTests
+        {{
+            [Fact]
+            public void ATitleIsRequired() => Assert.Equal("task_title_required", Assert.Throws<DomainException>(() => TaskItem.Create(Guid.NewGuid(), " ")).Code);
+
+            [Fact]
+            public void TitlesAreTrimmed() => Assert.Equal("Buy milk", TaskItem.Create(Guid.NewGuid(), " Buy milk ").Title);
+        }}
+
+        """;
+}
+
+// Scripted model: returns the next canned turn and records every prompt it was given.
+internal sealed class ScriptedModel(params object[] turns) : IModelProvider
+{
+    private int _next;
+    public List<string> Prompts { get; } = [];
+    public Task<ModelResponse> GenerateAsync(ModelRequest request, CancellationToken ct = default)
+    {
+        Prompts.Add(request.UserPrompt);
+        Assert.Equal("developer_turn", request.OutputSchema!.Name);
+        var turn = turns[Math.Min(_next++, turns.Length - 1)];
+        return Task.FromResult(turn as ModelResponse ?? new ModelResponse((string)turn, "scripted", Usage: new ModelUsage("openai", "scripted", 5_000, 2_000)));
+    }
+}
+
+public class DeveloperAgentTests
+{
+    private sealed class FakeSession : IWorkspaceSession
+    {
+        public Dictionary<string, string> Written { get; } = [];
+        public List<string> Deleted { get; } = [];
+        public List<string> Ran { get; } = [];
+        public StepOutcome Outcome { get; set; } = StepOutcome.Passed;
+        public Task WriteAsync(string path, string content, CancellationToken ct = default) { Written[path] = content; return Task.CompletedTask; }
+        public Task DeleteAsync(string path, CancellationToken ct = default) { Deleted.Add(path); return Task.CompletedTask; }
+        public Task<StepResult> RunAsync(SandboxStep step, CancellationToken ct = default)
+        {
+            Ran.Add(step.Name);
+            return Task.FromResult(new StepResult(step.Name, Outcome, Outcome == StepOutcome.Passed ? 0 : 1, TimeSpan.Zero, "output of " + step.Name, false));
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakeRunner(FakeSession? session) : IWorkspaceRunner
+    {
+        public Task<IWorkspaceSession> StartAsync(IReadOnlyList<TemplateFile> files, CancellationToken ct = default)
+            => session is null ? throw new SandboxUnavailableException("docker_unavailable") : Task.FromResult<IWorkspaceSession>(session);
+    }
+
+    private sealed class FakeVerifier(SandboxOutcome outcome) : ISandbox
+    {
+        public IReadOnlyList<TemplateFile>? Files;
+        public Task<SandboxReport> RunAsync(IReadOnlyList<TemplateFile> workspace, IReadOnlyList<SandboxStep> steps, CancellationToken ct = default)
+        {
+            Files = workspace;
+            return Task.FromResult(new SandboxReport("sha256:" + new string('a', 64), TemplateContent.Hash(TemplateContent.Normalize(workspace)),
+                SandboxLimits.Default, [], outcome, outcome == SandboxOutcome.Passed ? null : "step_failed", DateTimeOffset.UnixEpoch, TimeSpan.Zero));
+        }
+    }
+
+    // gpt-5.4-mini prices (USD per 1M tokens, verified 2026-10-16) in micro-USD.
+    private static CostGuard Guard(long cap = 400_000) => new(750_000, 4_500_000, cap);
+
+    private static (DeveloperAgent Agent, DevelopmentWorkspace Workspace, FakeSession Session, FakeVerifier Verifier) Create(ScriptedModel model,
+        DevelopmentLimits? limits = null, SandboxOutcome verification = SandboxOutcome.Passed, long cap = 400_000, bool sandbox = true)
+    {
+        var session = new FakeSession();
+        var verifier = new FakeVerifier(verification);
+        return (new DeveloperAgent(model, new FakeRunner(sandbox ? session : null), verifier, Guard(cap), limits ?? DevelopmentLimits.Default),
+            new DevelopmentWorkspace(DevelopmentWorkspaceTests.Application("SampleShop")), session, verifier);
+    }
+
+    [Fact]
+    public async Task EditsBuildsTestsAndFinishes_WithVerifiedFinalFiles()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Domain/Common/AggregateRoot.cs"),
+                DeveloperScripts.Write("src/SampleShop.Domain/Tasks/TaskItem.cs", string.Format(DeveloperScripts.TaskItem, "SampleShop"), "FR-1"),
+                DeveloperScripts.Write("tests/SampleShop.Tests/TaskItemTests.cs", string.Format(DeveloperScripts.TaskItemTests, "SampleShop"), "FR-1"),
+                DeveloperScripts.Act(DeveloperActionKind.Build), DeveloperScripts.Act(DeveloperActionKind.Test)),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "TaskItem with a required title")));
+        var (agent, workspace, session, verifier) = Create(model);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.Verified, (string?)null, 2, 6), (result.Status, result.FailureCode, result.Turns, result.Actions));
+        Assert.Equal(["src/SampleShop.Domain/Tasks/TaskItem.cs", "tests/SampleShop.Tests/TaskItemTests.cs"], result.Changes.Select(c => c.Path));
+        Assert.All(result.Changes, c => Assert.Equal(["FR-1"], c.RequirementIds));
+        Assert.Equal(["dotnet-restore", "dotnet-build", "dotnet-test"], session.Ran);
+        Assert.Equal(2, session.Written.Count);
+        // The final verification receives exactly the authoritative files, including the agent's edits.
+        Assert.Equal(result.Files.Select(f => f.Path), verifier.Files!.Select(f => f.Path));
+        Assert.Contains(verifier.Files!, f => f.Path == "src/SampleShop.Domain/Tasks/TaskItem.cs");
+        // The second prompt shows the results of the first turn's actions, including the file read.
+        Assert.Contains("public abstract class AggregateRoot<TId>", model.Prompts[1]);
+        Assert.Contains("dotnet-test: passed", model.Prompts[1]);
+        Assert.Contains("added src/SampleShop.Domain/Tasks/TaskItem.cs", model.Prompts[1]);
+        // Each call: 5,000 in / 2,000 out at $0.75/$4.50 per 1M = 3,750 + 9,000 = 12,750 micro-USD.
+        Assert.Equal([12_750, 12_750], result.Calls.Select(c => c.CostMicros));
+        Assert.Equal(25_500, result.CostMicros);
+    }
+
+    [Fact]
+    public async Task UnsafeOrUntracedEdits_AreRejected_AndReportedToTheModel()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(
+                DeveloperScripts.Write("tests/SampleShop.Tests/ArchitectureTests.cs", "// disabled", "FR-1"),
+                DeveloperScripts.Write("src/SampleShop.Domain/SampleShop.Domain.csproj", "<Project />", "FR-1"),
+                DeveloperScripts.Write("src/SampleShop.Domain/Extra.cs", "class Extra {}", "FR-99"),
+                DeveloperScripts.Write("src/SampleShop.Domain/Untraced.cs", "class Untraced {}"),
+                DeveloperScripts.Write("../escape.cs", "x", "FR-1"),
+                DeveloperScripts.Act(DeveloperActionKind.Read, ".git/config")),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var (agent, workspace, session, _) = Create(model, verification: SandboxOutcome.Failed);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.VerificationFailed, "step_failed"), (result.Status, result.FailureCode));
+        Assert.Empty(result.Changes);
+        Assert.Empty(session.Written);
+        // Six actions, six rejections: two protected files, an unknown and a missing requirement, two unsafe paths.
+        Assert.Equal(6, model.Prompts[1].Split("rejected: workspace_").Length - 1);
+        Assert.Contains("rejected: workspace_ProtectedPath", model.Prompts[1]);
+        Assert.Contains("rejected: workspace_MissingRequirement", model.Prompts[1]);
+        Assert.Contains("rejected: workspace_InvalidPath", model.Prompts[1]);
+    }
+
+    [Fact]
+    public async Task TheCostCap_StopsCallsBeforeTheyCanExceedIt()
+    {
+        var guard = Guard(100_000);
+        Assert.True(guard.TryReserve(20_000, 12_000, out var first)); // 15,000 + 54,000 = 69,000
+        Assert.Equal(69_000, first);
+        Assert.False(guard.TryReserve(20_000, 12_000, out _));       // 138,000 would exceed 100,000
+        Assert.Equal(3_750 + 4_500, guard.Settle(first, new ModelUsage("openai", "m", 5_000, 1_000)));
+        Assert.Equal(8_250, guard.SpentMicros);
+        Assert.True(guard.TryReserve(20_000, 12_000, out var unknown));
+        Assert.Equal(69_000, guard.Settle(unknown, null)); // no reported usage keeps the worst case
+
+        var looping = new ScriptedModel(DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.List)));
+        var (agent, workspace, _, _) = Create(looping, cap: 150_000);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.BudgetExhausted, "cost_cap_reached"), (result.Status, result.FailureCode));
+        Assert.True(result.CostMicros <= 150_000);
+        Assert.Equal(looping.Prompts.Count, result.Calls.Count);
+    }
+
+    [Fact]
+    public async Task TurnAndActionLimits_EndTheJob()
+    {
+        var looping = new ScriptedModel(DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.List)));
+        var (agent, workspace, _, _) = Create(looping, DevelopmentLimits.Default with { MaxTurns = 3 });
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.NotFinished, "turn_limit_reached", 3), (result.Status, result.FailureCode, result.Turns));
+
+        var busy = new ScriptedModel(DeveloperScripts.Turn([.. Enumerable.Repeat(DeveloperScripts.Act(DeveloperActionKind.List), 8)]));
+        (agent, workspace, _, _) = Create(busy, DevelopmentLimits.Default with { MaxActions = 10 });
+        result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.NotFinished, "action_limit_reached", 2), (result.Status, result.FailureCode, result.Turns));
+    }
+
+    [Theory]
+    [InlineData("not json", "invalid_model_output")]
+    [InlineData("""{"notes":"x","actions":[]}""", "invalid_model_output")]
+    [InlineData("""{"notes":"x","actions":[{"kind":"shell","path":null,"content":null,"text":"rm -rf /","requirementIds":[],"summary":null}]}""", "invalid_model_output")]
+    [InlineData("""{"notes":"x","actions":[],"extra":1}""", "invalid_model_output")]
+    public async Task MalformedModelOutput_EndsTheJob(string content, string failure)
+    {
+        var (agent, workspace, _, _) = Create(new ScriptedModel(content));
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.ModelFailed, failure), (result.Status, result.FailureCode));
+    }
+
+    [Fact]
+    public async Task RefusalsAndSandboxFailures_EndTheJob()
+    {
+        var (agent, workspace, _, _) = Create(new ScriptedModel(new ModelResponse("", "m", ModelResponseStatus.Refused)));
+        Assert.Equal("model_refused", (await agent.RunAsync(DeveloperScripts.Task, workspace)).FailureCode);
+        (agent, workspace, _, _) = Create(new ScriptedModel(DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.List))), sandbox: false);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.SandboxFailed, 0), (result.Status, result.Calls.Count));
+    }
+}
+
+// Executed against the real runner image with a scripted model: the full loop on real builds.
+[Collection(DockerCollection.Name)]
+public class DeveloperAgentSandboxTests
+{
+    [SandboxFact]
+    public async Task AScriptedDeveloper_IsVerifiedOfflineInAFreshSandbox()
+    {
+        var options = new DockerSandboxOptions(Environment.GetEnvironmentVariable("FACTORY_RUNNER_IMAGE")!, SandboxLimits.Default);
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(
+                DeveloperScripts.Write("src/SampleShop.Domain/Tasks/TaskItem.cs", string.Format(DeveloperScripts.TaskItem, "SampleShop"), "FR-1"),
+                DeveloperScripts.Write("tests/SampleShop.Tests/TaskItemTests.cs", string.Format(DeveloperScripts.TaskItemTests, "SampleShop"), "FR-1"),
+                DeveloperScripts.Act(DeveloperActionKind.Build), DeveloperScripts.Act(DeveloperActionKind.Test)),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var agent = new DeveloperAgent(model, new DockerWorkspaceRunner(options), new DockerSandbox(options), new CostGuard(750_000, 4_500_000, 400_000),
+            DevelopmentLimits.Default);
+        var workspace = new DevelopmentWorkspace(DevelopmentWorkspaceTests.Application("SampleShop"));
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.True(result.Status == DevelopmentStatus.Verified, string.Join("\n", model.Prompts.Skip(1)));
+        Assert.Equal(6, result.Verification!.Steps.Count(s => s.Outcome == StepOutcome.Passed));
+        Assert.Contains("Passed!", result.Verification.Steps.Single(s => s.Name == "dotnet-test").Output);
+        Assert.True(model.Prompts[1].Contains("dotnet-test: passed"), model.Prompts[1][^Math.Min(3000, model.Prompts[1].Length)..]);
+        // The template's 6 tests plus the agent's 2.
+        Assert.Matches(@"Passed:\s+8,", result.Verification.Steps.Single(s => s.Name == "dotnet-test").Output);
+    }
+}

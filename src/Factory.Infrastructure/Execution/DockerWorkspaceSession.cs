@@ -6,16 +6,11 @@ using Factory.Core.Templates;
 
 namespace Factory.Infrastructure.Execution;
 
-public sealed class SandboxUnavailableException(string code) : Exception(code)
-{
-    public string Code { get; } = code;
-}
-
 // M10.1: a sandbox that lives for a whole development job, so the agent can build and test after its
 // edits. Same container isolation as DockerSandbox. Files are written only from the Factory's
 // authoritative workspace; anything the untrusted code changes in /work is never read back as source.
 // A step that times out leaves processes behind, so the session is then faulted and must be disposed.
-public sealed class DockerWorkspaceSession : IAsyncDisposable
+public sealed class DockerWorkspaceSession : IWorkspaceSession
 {
     private readonly DockerSandboxOptions _options;
     private readonly string _name;
@@ -96,6 +91,12 @@ public sealed class DockerWorkspaceSession : IAsyncDisposable
         try { await DockerSandbox.Docker(_options, ["rm", "--force", "--volumes", _name], null, TimeSpan.FromMinutes(1), CancellationToken.None); }
         catch (System.ComponentModel.Win32Exception) { }
     }
+}
+
+public sealed class DockerWorkspaceRunner(DockerSandboxOptions options) : IWorkspaceRunner
+{
+    public async Task<IWorkspaceSession> StartAsync(IReadOnlyList<TemplateFile> files, CancellationToken ct = default)
+        => await DockerWorkspaceSession.StartAsync(options, files, ct);
 }
 
 public sealed record WorkspaceDiff(string BaseCommit, string FinalCommit, string Diff, string DiffSha256);

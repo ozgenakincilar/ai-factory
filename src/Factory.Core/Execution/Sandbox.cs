@@ -28,6 +28,13 @@ public sealed record SandboxStep(string Name, IReadOnlyList<string> Arguments, s
 }
 
 public enum StepOutcome { Passed, Failed, TimedOut, Skipped }
+
+// The sandbox could not be started, written to or used (Docker missing, container gone, faulted).
+public sealed class SandboxUnavailableException(string code) : Exception(code)
+{
+    public string Code { get; } = code;
+}
+
 public enum SandboxOutcome { Passed, Failed, TimedOut, SandboxError }
 
 // Output is bounded: the first and last half of OutputBytes are kept when a step prints more.

@@ -16,6 +16,10 @@ VALUES
     -- reservations are upper bounds (about 5x for ordinary prompts) and the USD 2 demo cap can
     -- never be overrun by long prompts. Verified 2026-10-16 (global routing, no inference_geo).
     ('anthropic','claude-haiku-5-5','2026-10-16T00:00:00Z',500000,2500000,
-     'https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-10-16; >100K-prompt tier as upper bound)')
+     'https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-10-16; >100K-prompt tier as upper bound)'),
+    -- Developer Agent model (M10 user decision): $0.75 input / $4.50 output per 1M tokens, standard
+    -- tier, prompts under 272K tokens; snapshot gpt-5.4-mini-2026-03-17 matches by prefix.
+    ('openai','gpt-5.4-mini','2026-10-16T00:00:00Z',750000,4500000,
+     'https://developers.openai.com/api/docs/models/gpt-5.4-mini (verified 2026-10-16)')
 ON CONFLICT DO NOTHING;
 COMMIT;
