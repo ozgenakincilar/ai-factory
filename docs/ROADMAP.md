@@ -380,6 +380,9 @@ Provider delivery order is Azure, then AWS, then Google Cloud. M14 depends on th
 existing Milestones 6–12 and the M13A Azure path; it must not be gated on completing M13B or
 M13C. The pilot's Azure ownership model and workload-specific acceptance criteria must be
 selected during pilot planning; this document does not extend StockFlow's supplied Product CRUD scope.
+User decision of 2026-10-16: the pilot uses the user's own Azure subscription in West Europe with a
+USD 5/month budget (see [Decisions](DECISIONS.md#azure-for-the-m14-pilot-2026-10-16-user-decision));
+the account had no subscription yet on that date.
 
 ## M15 — SaaS Beta Hardening
 

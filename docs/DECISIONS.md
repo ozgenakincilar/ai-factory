@@ -356,6 +356,15 @@ Taken under the same delegated authority; open to the user's review.
 - **Failure semantics.** Any failed part fails the run (no partial publication); running siblings
   lose their lease and their late results are refused.
 
+## Azure for the M14 pilot (2026-10-16, user decision)
+
+- The M14 StockFlow pilot will deploy into the **user's own Azure subscription** (customer-owned /
+  BYOC path), region **West Europe**, with an Azure budget and alert of **USD 5 per month** on the
+  pilot's resource group. Azure is not used for M9 execution; the M9 container-runtime decision stays open.
+- Prerequisite found on 2026-10-16: Azure CLI 2.91.0 was installed and `az login` succeeded, but the
+  account has **no Azure subscription**. No Azure resources exist and none were created. A
+  subscription must exist before any M13A/M14 work touches Azure.
+
 ## Review page — M12b (2026-10-16, delegated)
 
 Taken under the user's delegated authority ("devam et geliştirmeye kaldığın yerden"); open to review.
