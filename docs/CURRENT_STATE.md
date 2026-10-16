@@ -36,8 +36,11 @@ format) is committed and pushed as `2b29be2` (881 passed). A live run then faile
 live decomposed run succeeded end to end (968 micro-USD), and the full suite passed again (881).
 M12a (first Product Workspace slice: Angular 22 web app with Keycloak PKCE sign-in, projects, runs,
 new-run form, blocking decision popup and live updates; additive listing endpoints and an optional
-`Authentication:WebClient`) is a local candidate verified with 885 passed, 8 web unit tests and one
-real-browser end-to-end run; see [Product Workspace](PRODUCT_WORKSPACE.md). M9 awaits the user's
+`Authentication:WebClient`) is committed and pushed as `8d30e71` (885 passed, 8 web unit tests, one
+real-browser end-to-end run). M12b adds the review page (proposal display with requirement provenance,
+browser-side SHA-256 check of the shown bytes, approve/request changes/reject on the existing review
+endpoints; no backend change), verified with 885 passed, 15 web unit tests and one real-browser
+end-to-end run including an approval; see [Product Workspace](PRODUCT_WORKSPACE.md). M9 awaits the user's
 container-runtime decision (no Docker/WSL on the machine).
 
 ## Milestone 8.1 current handoff
@@ -246,7 +249,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 8.4b | Committed/pushed Anthropic provider, 8d0f3d6 (841 passed; live call pending account credit), see COST_CONTROLS.md |
 | 8.5a | Committed/pushed model routing policy and route evidence, fe83818 (853 passed), see COST_CONTROLS.md |
 | 8.5b/c | Committed/pushed decomposition, plan approval, parallel parts, 2b29be2; Planner fix plus one successful live run (881 passed), see COST_CONTROLS.md |
-| 12a | Local candidate: Product Workspace slice (885 passed, 8 web tests, browser e2e), see PRODUCT_WORKSPACE.md |
+| 12a | Committed/pushed Product Workspace slice, 8d30e71 (885 passed, 8 web tests, browser e2e), see PRODUCT_WORKSPACE.md |
+| 12b | Review page: proposal display, verified-bytes decisions (885 passed, 15 web tests, browser e2e with approval), see PRODUCT_WORKSPACE.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

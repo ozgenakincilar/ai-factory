@@ -1,6 +1,6 @@
 // End-to-end check of the Product Workspace in a real headless Edge: Keycloak sign-in (PKCE),
-// project list, a decomposed run, the blocking plan-approval popup and live updates until the run
-// finishes. Requires Keycloak, the API (Run-FactoryWorkspace.ps1), the web dev server and a worker.
+// project list, a decomposed run, the blocking plan-approval popup, live updates until the run
+// finishes, and the review of the published proposal (verified bytes, approval). Requires Keycloak, the API (Run-FactoryWorkspace.ps1), the web dev server and a worker.
 // Never prints credentials or tokens. Usage: node scripts/Test-FactoryWorkspace.mjs [project]
 import { readFile, mkdir, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -90,6 +90,22 @@ try {
   await until('run detail', `document.querySelectorAll('table tbody tr').length >= 6 && document.body.textContent.includes('Published')`);
   const detail = await evaluate(`({ steps: document.querySelectorAll('table tbody tr').length, tiers: [...document.querySelectorAll('table tbody tr td:nth-child(5)')].map(t => t.textContent.trim()).filter(Boolean) })`);
   step(`run detail: ${detail.steps} steps, routed tiers ${detail.tiers.join('/')}, publication shown`);
+  await evaluate(`document.querySelector('a.review').click()`);
+  await until('verified review', `document.body.textContent.includes('content verified') && document.querySelector('.requirements tbody tr') !== null`);
+  const review = await evaluate(`(() => { const b = t => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === t);
+    return { state: document.querySelector('.state').textContent.trim(), requirements: document.querySelectorAll('.requirements tbody tr').length,
+      statuses: [...new Set([...document.querySelectorAll('.requirements .badge')].map(x => x.textContent.trim()))],
+      rejectDisabled: b('Reject').disabled, approveDisabled: b('Approve').disabled }; })()`);
+  if (review.state !== 'pending review' || review.approveDisabled || !review.rejectDisabled) throw new Error('unexpected_review_page');
+  step(`review page: ${review.requirements} requirements (${review.statuses.join(', ')}), content verified, reject needs a reason`);
+  await evaluate(`(() => { const e = document.querySelector('textarea[name=reason]'); e.value = 'Checked in the workspace end-to-end test.';
+    e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until('enabled reject', `![...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Reject').disabled`);
+  await evaluate(`[...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Approve').click()`);
+  await until('approved', `document.querySelector('.state')?.textContent.trim() === 'approved' && document.body.textContent.includes('Decision recorded.')`);
+  await send('Page.reload');
+  await until('persisted decision', `document.querySelector('.state')?.textContent.trim() === 'approved' && document.body.textContent.includes('Checked in the workspace end-to-end test.')`);
+  step('approval with reason recorded against the verified bytes and shown after reload');
   console.log('WORKSPACE_E2E_PASSED');
 } catch (error) {
   console.log(['page errors:', ...pageErrors.slice(0, 10)].join(String.fromCharCode(10)));

@@ -1,4 +1,4 @@
-# M12a — Product Workspace slice
+# M12a/M12b — Product Workspace slices
 
 Status: implemented and verified on 2026-10-16 under the user's delegated authority (request: continue
 with the UI slice while M9 waits for the container-runtime decision). This is the first slice of
@@ -26,6 +26,20 @@ describes inspected code and executed local verification, not production readine
 - **Authentication**: optional `Authentication:WebClient`; its tokens identify humans exactly like
   `HumanClient` tokens and must carry the hardcoded `factory_kind=Human` claim. It must differ from
   the other clients and the audience; any other client is rejected at authentication (401).
+
+## M12b — review page
+
+- Route `/projects/{id}/reviews/{caseId}`, linked from a run's publication for project Reviewers
+  (other members see that only reviewers can open it; the API answers 403 anyway).
+- Shows the request, the requirements analysis (each requirement labelled confirmed with its source,
+  suggested, or unverified assumption; assumptions, risks, open questions) and the architecture
+  proposal (components, technology decisions with alternatives and trade-offs, risks, ADRs, each with
+  its requirement traces), plus the current state and any recorded decision.
+- The artifact is fetched as raw bytes and hashed in the browser; decisions are enabled only when the
+  hash equals the published SHA-256 and the envelope's case and version match. The decision sends
+  that version and hash with `If-Match` and an `Idempotency-Key` (kept after a network failure so a
+  retry replays). Reject and request changes need a reason; 409/412 reload the case.
+- No backend change.
 
 ## Running locally
 
@@ -64,11 +78,29 @@ SDK 10.0.103, Node 24.19.0, npm 11.17.0; local candidate on top of `f992eab`.
    `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_10_04_15.trx`, SHA-256
    `0dd9a21be28a4e0cf3a18edc3482d78b318577b4826bd1e99d62da95a6cb7240`.
 
+## Executed verification M12b — 2026-10-16
+
+Local candidate on top of `8d30e71`, same tool versions.
+
+1. Web unit tests (Vitest): **15 passed** (8 + 7: reason policy mirror, decision body, SHA-256 vector,
+   trace text, review page approving the exact bytes, decisions disabled on hash mismatch). Production
+   build succeeded (455 kB initial, 115 kB transferred).
+2. End-to-end in real headless Edge against `factory_m7_verify_20261015` with a `gpt-4o-mini` worker:
+   the M12a flow, then the review page: content verified, 1 requirement (confirmed), reject disabled
+   without a reason, approval with a reason recorded, state `approved` and reason shown after reload.
+   Run `c57cc73d-6318-469e-a8bc-8ceda0f6f91f`: 3 calls, 2098 input / 577 output tokens, 663 micro-USD.
+   API 16, worker 22 log lines without errors; no credential- or token-like strings in logs.
+3. Full .NET suite with `-IncludeKeycloak`: the first attempt had 3 live Keycloak failures because the
+   stored browser tokens had expired (IDX10223, 401); after `scripts/Test-KeycloakBrowser.mjs`
+   refreshed them: build **0 warnings, 0 errors**; **885 passed, 0 failed, 0 skipped**. TRX (ignored):
+   `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_10_34_01.trx`, SHA-256
+   `d5bae22e4f2cb504d6e64c1d8b9b0efb0bf4fe9b3a747e4009756d05a83ae357`.
+
 ## Limits
 
 - Local development only: loopback HTTP issuer and dev-server proxy; no production hosting, HTTPS
   setup, content security policy or token-storage hardening yet.
-- No organization/model/budget administration, review-case approval, roadmap or PR views (rest of
-  M12). Runs are listed by time and status only; run views never show task text by design.
+- No organization/model/budget administration, review-case list, roadmap or PR views (rest of M12);
+  review cases are reached from their run's publication. Runs are listed by time and status only; run views never show task text by design.
 - Long polling only; one browser end-to-end sample is evidence of the path, not a reliability measure.
 - The e2e script is run manually; it is not part of the .NET test suite.

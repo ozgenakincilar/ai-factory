@@ -356,6 +356,21 @@ Taken under the same delegated authority; open to the user's review.
 - **Failure semantics.** Any failed part fails the run (no partial publication); running siblings
   lose their lease and their late results are refused.
 
+## Review page — M12b (2026-10-16, delegated)
+
+Taken under the user's delegated authority ("devam et geliştirmeye kaldığın yerden"); open to review.
+
+- No backend change: the page uses the M5B.2 review endpoints as they are (Reviewer role, If-Match,
+  Idempotency-Key, artifact version and SHA-256 in the body).
+- The browser hashes the exact artifact bytes it renders (Web Crypto) and sends that hash; deciding is
+  disabled when it differs from the published hash or the envelope does not match the case/version.
+  The server remains authoritative; this only ensures the decision names what the reviewer saw.
+- The reason rule is mirrored client-side (DecisionReasonPolicy v1) only to enable buttons; the server
+  still validates.
+- Requirement provenance stays visible (confirmed with source, suggested, unverified assumption) and
+  the architecture is labelled as a proposal.
+- Review decisions are not blocking popups: unlike run decisions they do not stop a run.
+
 ## Product Workspace slice — M12a (2026-10-16, delegated)
 
 Taken under the user's delegated authority after "kaldığımız yerden devam edelim" (M9 blocked on a

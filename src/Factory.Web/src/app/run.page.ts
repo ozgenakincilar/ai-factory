@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, DestroyRef, OnInit, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -44,6 +44,9 @@ import { WorkspaceState } from './workspace.state';
       @if (run.publication; as published) {
         <h2>Published</h2>
         <p>Review case {{ published.caseId }}, version {{ published.version }}</p>
+        @if (isReviewer()) {
+          <p><a class="review" [routerLink]="['/projects', id(), 'reviews', published.caseId]">Open review</a></p>
+        } @else { <p class="meta">Only reviewers of this project can open the review.</p> }
       }
     } @else if (failed()) { <p class="error" role="alert">The run could not be loaded.</p> }`,
   styles: `table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); }
@@ -62,6 +65,7 @@ export class RunPage implements OnInit {
   protected readonly view = signal<RunView | null>(null);
   protected readonly plan = signal<RunPlan | null>(null);
   protected readonly failed = signal(false);
+  protected readonly isReviewer = computed(() => this.state.project()?.roles.includes('Reviewer') ?? false);
 
   ngOnInit(): void {
     void this.state.open(this.id());

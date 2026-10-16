@@ -12,7 +12,7 @@ functionality in the baseline. This document now records that planning context w
 its priorities. The user also supplied the dependency rules, M13A–M16 priorities and preliminary
 estimates, and the M15 beta-hardening scope below from that planning discussion.
 
-**M6–M8 are implemented and committed (see each milestone's status). M12a, a first Product Workspace slice, is implemented. M9 awaits the user's container-runtime decision; M9–M16 otherwise remain planned.**
+**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9 awaits the user's container-runtime decision; M9–M16 otherwise remain planned.**
 Estimated durations are preliminary planning ranges, not commitments or validated delivery
 forecasts. M6 architectural approval was subsequently supplied explicitly; its implementation and verification are recorded in [Product Lifecycle](PRODUCT_LIFECYCLE.md). No later milestone is authorized.
 
@@ -334,8 +334,9 @@ and independently recorded build/test results.
 
 ## M12 — Angular Product Workspace
 
-Status: **M12a slice implemented** (sign-in, projects, runs, blocking decision popup, live updates;
-see [Product Workspace](PRODUCT_WORKSPACE.md)); the rest is planned. Priority: **P1**. Estimated effort: **3–4 weeks**.
+Status: **M12a and M12b slices implemented** (sign-in, projects, runs, blocking decision popup, live
+updates; requirements/architecture proposal review and approval; see [Product Workspace](PRODUCT_WORKSPACE.md));
+the rest is planned. Priority: **P1**. Estimated effort: **3–4 weeks**.
 
 Goal: Provide a customer-facing Angular web portal.
 
