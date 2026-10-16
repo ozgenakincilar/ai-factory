@@ -12,7 +12,7 @@ functionality in the baseline. This document now records that planning context w
 its priorities. The user also supplied the dependency rules, M13A–M16 priorities and preliminary
 estimates, and the M15 beta-hardening scope below from that planning discussion.
 
-**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9 awaits the user's container-runtime decision; M9–M16 otherwise remain planned.**
+**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9's local runtime (Docker Desktop + WSL 2) is decided; M9 awaits the template stack/DDD layout confirmation; M9–M16 otherwise remain planned.**
 Estimated durations are preliminary planning ranges, not commitments or validated delivery
 forecasts. M6 architectural approval was subsequently supplied explicitly; its implementation and verification are recorded in [Product Lifecycle](PRODUCT_LIFECYCLE.md). No later milestone is authorized.
 
@@ -270,7 +270,11 @@ Tasks:
 Acceptance criteria: Factory can generate a starter application deterministically and build/test
 it in an isolated environment without giving untrusted code access to Factory infrastructure.
 
-### M9 proposed execution design (2026-10-16, pending user decision)
+### M9 proposed execution design (2026-10-16; local runtime decided, see below)
+
+Update 2026-10-16: the user approved Docker Desktop + WSL 2 as the local runtime; it is installed and
+smoke-tested (see [Decisions](DECISIONS.md#m9-local-execution-runtime-2026-10-16-user-decision)). The
+template stack and the starter template's DDD layer layout still need confirmation.
 
 Inspected on the development machine (2026-10-16): no Docker, Podman or installed WSL distribution.
 Generated code is untrusted, so it must never build or run in the Factory's own processes or on the

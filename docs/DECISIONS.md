@@ -356,11 +356,26 @@ Taken under the same delegated authority; open to the user's review.
 - **Failure semantics.** Any failed part fails the run (no partial publication); running siblings
   lose their lease and their late results are refused.
 
+## M9 local execution runtime (2026-10-16, user decision)
+
+- The user approved **Docker Desktop on WSL 2** ("onaylıyorum") after the trade-offs against Podman,
+  a Hyper-V VM, Azure Container Apps, GitHub Actions and running on the host were explained.
+- Installed on 2026-10-16: WSL 2 (`wsl --install --no-distribution`, exit 0; default version 2) and
+  Docker Desktop via winget (installer hash verified); Docker client/server 29.8.2, linux/amd64,
+  after a Windows restart.
+- Executed smoke test: `hello-world` ran; an `alpine:3.22` container with `--network none --read-only
+  --user 65534:65534 --cpus 1 --memory 256m --pids-limit 64 --cap-drop ALL --security-opt
+  no-new-privileges` reported uid 65534, no network (HTTP request failed), read-only root filesystem
+  and the cgroup limits (memory 268435456, pids 64, cpu 100000/100000). This verifies the isolation
+  flags on this machine only; it is not M9's sandbox implementation or a security review.
+- Still open before M9 starts: the template stack (proposed Angular + ASP.NET Core + PostgreSQL) and
+  the starter template's DDD layer layout (proposed Domain/Application/Infrastructure/Api).
+
 ## Azure for the M14 pilot (2026-10-16, user decision)
 
 - The M14 StockFlow pilot will deploy into the **user's own Azure subscription** (customer-owned /
   BYOC path), region **West Europe**, with an Azure budget and alert of **USD 5 per month** on the
-  pilot's resource group. Azure is not used for M9 execution; the M9 container-runtime decision stays open.
+  pilot's resource group. Azure is not used for M9 execution (see the M9 runtime decision below).
 - Prerequisite found on 2026-10-16: Azure CLI 2.91.0 was installed and `az login` succeeded, but the
   account has **no Azure subscription**. No Azure resources exist and none were created. A
   subscription must exist before any M13A/M14 work touches Azure.

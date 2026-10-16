@@ -40,8 +40,9 @@ new-run form, blocking decision popup and live updates; additive listing endpoin
 real-browser end-to-end run). M12b adds the review page (proposal display with requirement provenance,
 browser-side SHA-256 check of the shown bytes, approve/request changes/reject on the existing review
 endpoints; no backend change), verified with 885 passed, 15 web unit tests and one real-browser
-end-to-end run including an approval; see [Product Workspace](PRODUCT_WORKSPACE.md). M9 awaits the user's
-container-runtime decision (no Docker/WSL on the machine).
+end-to-end run including an approval; see [Product Workspace](PRODUCT_WORKSPACE.md). The M9 runtime
+(Docker Desktop + WSL 2) is approved, installed and smoke-tested; M9 awaits the user's confirmation
+of the template stack and DDD layer layout (see [Decisions](DECISIONS.md#m9-local-execution-runtime-2026-10-16-user-decision)).
 
 ## Milestone 8.1 current handoff
 
