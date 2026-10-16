@@ -107,7 +107,7 @@ public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
     }
 
     // Workspace files as a tar stream: regular files 0644 and directories 0755, no links or devices.
-    private static byte[] Archive(IReadOnlyList<TemplateFile> files)
+    internal static byte[] Archive(IReadOnlyList<TemplateFile> files)
     {
         using var buffer = new MemoryStream();
         using (var tar = new TarWriter(buffer, TarEntryFormat.Pax, leaveOpen: true))
@@ -133,17 +133,21 @@ public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
         return buffer.ToArray();
     }
 
-    private sealed record ProcessResult(int Exit, bool TimedOut, string Output, bool Truncated);
+    internal sealed record ProcessResult(int Exit, bool TimedOut, string Output, bool Truncated);
 
-    private async Task<ProcessResult> Docker(IEnumerable<string> arguments, byte[]? input, TimeSpan timeout, CancellationToken cancellationToken)
+    private Task<ProcessResult> Docker(IEnumerable<string> arguments, byte[]? input, TimeSpan timeout, CancellationToken cancellationToken)
+        => Docker(_options, arguments, input, timeout, cancellationToken);
+
+    internal static async Task<ProcessResult> Docker(DockerSandboxOptions options, IEnumerable<string> arguments, byte[]? input, TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo(_options.DockerPath)
+        var start = new ProcessStartInfo(options.DockerPath)
         {
             RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = input is not null, UseShellExecute = false,
         };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("docker_not_started");
-        var output = new BoundedOutput(_options.Limits.OutputBytes);
+        var output = new BoundedOutput(options.Limits.OutputBytes);
         var stdout = Pump(process.StandardOutput.BaseStream, output);
         var stderr = Pump(process.StandardError.BaseStream, output);
         if (input is not null)

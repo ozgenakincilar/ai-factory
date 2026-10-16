@@ -51,6 +51,9 @@ CPU/memory/PID/disk/time/output limits, exec-reported exit codes) is verified wi
 8 Docker isolation cases. M9.3 (durable verification jobs, immutable hashed evidence, worker/API/
 Product Workspace integration, self-ending orphaned sandboxes) is verified with 937 passed, 19 web tests, a
 real-browser end-to-end verification and a live worker-crash recovery; Git workspaces are deferred to M10.
+M10 design, model (gpt-5.4-mini) and budget (USD 0.40 per job, USD 2 total) are decided; M10.1
+(authoritative workspace with protected rules, sandbox session, deterministic Git diff) is verified
+with 967 passed; see [Developer Agent](DEVELOPER_AGENT.md).
 
 ## Milestone 8.1 current handoff
 
@@ -262,7 +265,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 12b | Committed/pushed review page, a93f1bd (885 passed, 15 web tests, browser e2e with approval), see PRODUCT_WORKSPACE.md |
 | 9.1 | Committed/pushed starter template, registry, deterministic generation, 9bbdec7 (913 passed), see TEMPLATES_AND_EXECUTION.md |
 | 9.2 | Committed/pushed offline sandbox runner, d97e9c5 (930 passed), see TEMPLATES_AND_EXECUTION.md |
-| 9.3 | Verification jobs and immutable evidence (937 passed, 19 web tests, browser e2e, crash recovery), see TEMPLATES_AND_EXECUTION.md |
+| 9.3 | Committed/pushed verification jobs and immutable evidence, b95bf13 (937 passed), see TEMPLATES_AND_EXECUTION.md |
+| 10.1 | Developer workspace, sandbox session, Git snapshot (967 passed), see DEVELOPER_AGENT.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

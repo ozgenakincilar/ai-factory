@@ -197,6 +197,7 @@ public sealed class DockerFactAttribute : FactAttribute
 // M9.1 evidence: a generated application restores, builds and passes its own tests inside pinned
 // containers. Package restore uses the network because the template is Factory-authored and trusted;
 // untrusted generated code runs only in the offline M9.2 sandbox.
+[Collection(DockerCollection.Name)]
 public class StarterTemplateContainerTests
 {
     public const string DotnetSdkImage = "mcr.microsoft.com/dotnet/sdk@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa";

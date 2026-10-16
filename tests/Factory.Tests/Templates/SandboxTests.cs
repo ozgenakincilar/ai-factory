@@ -73,6 +73,14 @@ public class SandboxConfigurationTests
     }
 }
 
+// Docker cases run one class at a time: they share the Docker host, and several assert that no
+// sandbox container is left behind.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class DockerCollection
+{
+    public const string Name = "Docker sandbox";
+}
+
 public sealed class SandboxFactAttribute : FactAttribute
 {
     public SandboxFactAttribute()
@@ -84,6 +92,7 @@ public sealed class SandboxFactAttribute : FactAttribute
 }
 
 // Executed against the real runner image. Each probe is untrusted workspace code.
+[Collection(DockerCollection.Name)]
 public class SandboxIsolationTests
 {
     private static readonly string Image = Environment.GetEnvironmentVariable("FACTORY_RUNNER_IMAGE") ?? "";

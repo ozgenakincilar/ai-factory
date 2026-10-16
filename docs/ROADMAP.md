@@ -296,7 +296,7 @@ host directly. Proposal, not a decision:
 
 ## M10 — Developer Agent
 
-Status: planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
+Status: **M10.1 implemented** (see [Developer Agent](DEVELOPER_AGENT.md)); M10.2 and M10.3 planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
 
 Goal: Implement source-code development based on explicitly approved requirements and architecture.
 
