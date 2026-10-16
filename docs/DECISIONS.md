@@ -373,6 +373,16 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M10 Developer Agent model and budget (2026-10-16, user decision)
+
+- The user accepted the M10 design in the Roadmap and chose a stronger OpenAI model than gpt-4o-mini.
+- Prices were verified on developers.openai.com on 2026-10-16 (standard tier, per 1M tokens): gpt-5.5
+  $5/$30, gpt-5.4 $2.50/$15, gpt-5.6-terra $2/$12, gpt-4.1 $2/$8, gpt-5.4-mini $0.75/$4.50,
+  gpt-4.1-mini $0.40/$1.60, gpt-5-mini $0.25/$2, gpt-5.6-luna $0.20/$1.20; the Codex models are
+  Responses-API only and were excluded because the adapter uses Chat Completions.
+- Decision: **gpt-5.4-mini**, **USD 0.40 per development job**, **USD 2 total** for M10 live runs; the
+  first paid run is one small job at the end of M10.2. Until then only scripted fake models are used.
+
 ## M9.3 verification jobs (2026-10-16, delegated)
 
 Taken under the user's delegated authority after "evet"; open to review.

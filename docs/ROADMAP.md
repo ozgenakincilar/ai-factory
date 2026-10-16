@@ -316,6 +316,44 @@ Acceptance criteria: The Developer Agent can implement the StockFlow Product CRU
 an isolated Git workspace, produce a reviewable diff and associate changes with approved requirements.
 The implementation follows the approved bounded contexts and aggregates.
 
+### M10 design (2026-10-16, decided)
+
+Design accepted by the user; model, budget and live-run timing decided (see
+[Decisions](DECISIONS.md#m10-developer-agent-model-and-budget-2026-10-16-user-decision)). Builds on M5 review cases, M7/M8 durable runs and budgets, and M9 templates,
+sandbox and evidence.
+
+- **Trigger:** explicit only. A Generator starts a *development job* for a review case whose current
+  version is **Approved**, naming that version and its SHA-256; a changed or unapproved case is refused.
+  No approval-triggered automatic execution.
+- **Workspace:** one sandbox per job (M9.2 limits, no network). The worker generates the starter
+  application (M9.1) and makes it the first commit of a Git repository inside the sandbox; every agent
+  iteration that changes files becomes a commit. Output: the unified diff from the starter commit, the
+  final tree id, and the M9 verification report.
+- **Agent loop (provider-neutral):** no shell and no function-calling dependency. Each iteration is one
+  Structured Outputs call returning bounded actions: `list`, `read`, `search`, `write` (whole file),
+  `delete`, `build`, `test`, `finish`. The worker executes them through fixed commands in the sandbox;
+  paths are validated (relative, inside the repository, no `.git`, size limits). Build/test feedback
+  (bounded output) goes into the next iteration.
+- **Budgets:** at most 12 iterations, 40 actions, 20,000 input / 4,000 output tokens per call, and a
+  per-job cost cap enforced through the M8.3 reservations before every call. Exceeding any bound ends
+  the job as failed with evidence; nothing is retried silently.
+- **Traceability and DDD:** every `write`/`delete` names the requirement ids it serves (validated
+  against the approved artifact) and the job records them per file. The template's architecture tests
+  run in every build; business rules belong in aggregates and value objects (prompt rule plus tests).
+- **Result:** the job succeeds only when the final offline verification (restore, build, test, web
+  test, web build) passes. The diff, per-file requirement links and the report are stored as immutable,
+  hashed evidence and shown in the Product Workspace for human review. GitHub branches and pull
+  requests remain M11.
+- **Model:** `gpt-5.4-mini` for the Developer role (user decision; Chat Completions with Structured
+  Outputs; verified price USD 0.75 input / 4.50 output per 1M tokens, standard tier, 2026-10-16).
+- **Budget:** USD 0.40 per development job and USD 2 in total for M10 live runs (user decision).
+  Worst case per job 240,000 in + 48,000 out ≈ USD 0.40; reasoning tokens are billed as output, so real
+  jobs may stop at the cap. Model quality for this task is not measured yet.
+- **Slices:** M10.1 contracts, path-safe workspace actions and Git in the sandbox (no model);
+  M10.2 agent loop with budgets and traceability (scripted fake model in tests, then a small live run);
+  M10.3 development jobs, evidence, API and Product Workspace diff view; StockFlow Product CRUD as the
+  acceptance run.
+
 ## M11 — Verification Agent & GitHub Pull Request
 
 Status: planned. Priority: **P0**. Estimated effort: **2–3 weeks**.
