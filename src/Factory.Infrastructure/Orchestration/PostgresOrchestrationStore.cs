@@ -4,6 +4,7 @@ using Factory.Core.Agents;
 using Factory.Core.Analysis;
 using Factory.Core.Architecture;
 using Factory.Core.Authorization;
+using Factory.Core.Decomposition;
 using Factory.Core.Lifecycle;
 using Factory.Core.Orchestration;
 using Factory.Core.Tenancy;
@@ -59,12 +60,31 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     public Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, CancellationToken ct = default)
+        => SubmitAsync(actor, key, request, WorkflowVersions.AnalysisArchitecture, ct);
+
+    public Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, string workflowVersion, CancellationToken ct = default)
     {
-        // Same input bounds and canonical sources as M6 admission.
+        // Same input bounds and canonical sources as M6 admission (checked with the M6 version constant).
+        if (!WorkflowVersions.IsKnown(workflowVersion)) throw new OrchestrationException(OrchestrationError.InvalidCommand);
         try { GenerationFingerprint.Validate(new GenerationCommand(key, null, null, DurableWorkflowLimits.WorkflowVersion, request)); }
         catch (LifecycleException) { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
-        return Read<RunSubmission>("submit", actor, request.ProjectId, ct, P("key", key), P("version", DurableWorkflowLimits.WorkflowVersion),
+        return Read<RunSubmission>("submit", actor, request.ProjectId, ct, P("key", key), P("version", workflowVersion),
             P("input", JsonSerializer.Serialize(request, Json), NpgsqlDbType.Jsonb));
+    }
+
+    public async Task<RunPlan> GetPlanAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default)
+    {
+        var raw = await Read<RawPlan>("read_plan", actor, projectId, ct, P("run", runId));
+        DecompositionPlan? plan;
+        try { plan = raw.Plan.Deserialize<DecompositionPlan>(DecompositionJson.Options); }
+        catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
+        if (DecompositionPlanValidator.GetStructureError(plan) is not null) throw new OrchestrationException(OrchestrationError.Integrity);
+        // Routing is deterministic, so the popup can show each part's tier before anything runs.
+        return new RunPlan(raw.RunId, plan!, plan!.Parts.Select(p =>
+        {
+            var route = ModelRoutingPolicy.Route(StepKind.Part, p.Complexity, p.Importance);
+            return new PartRoute(p.Key, route.Tier, route.Reason);
+        }).ToArray(), ModelRoutingPolicy.Version);
     }
 
     public Task<RunSubmission> SubmitRegenerationAsync(TrustedIdentity actor, Guid key, Guid workItemId, string expectedETag, WorkflowRequest request,
@@ -152,8 +172,38 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
                 if (!ArchitectureValidator.IsValid(architecture, Agent(request, analysis))) throw new OrchestrationException(OrchestrationError.Integrity);
             }
             if (raw.NextVersion < 1) throw new OrchestrationException(OrchestrationError.Integrity);
+            var version = raw.WorkflowVersion ?? WorkflowVersions.AnalysisArchitecture;
+            if (!WorkflowVersions.IsKnown(version)) throw new OrchestrationException(OrchestrationError.Integrity);
+            DecompositionPlan? plan = null; PlanPart? part = null; Dictionary<string, ArchitectureProposal>? outputs = null;
+            if (raw.Plan is { ValueKind: JsonValueKind.Object } c)
+            {
+                plan = c.Deserialize<DecompositionPlan>(DecompositionJson.Options);
+                if (!DecompositionPlanValidator.IsValid(plan, analysis)) throw new OrchestrationException(OrchestrationError.Integrity);
+            }
+            if (raw.Part is { ValueKind: JsonValueKind.Object } d)
+            {
+                // The stored part must be exactly the approved plan's part with that key.
+                var key = d.TryGetProperty("key", out var k) ? k.GetString() : null;
+                part = plan?.Parts.FirstOrDefault(p => p.Key == key) ?? throw new OrchestrationException(OrchestrationError.Integrity);
+                if (!System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(d.GetRawText()),
+                        JsonSerializer.SerializeToNode(part, DecompositionJson.Options)))
+                    throw new OrchestrationException(OrchestrationError.Integrity);
+            }
+            if (raw.PartOutputs is { Count: > 0 } stored)
+            {
+                if (plan is null) throw new OrchestrationException(OrchestrationError.Integrity);
+                outputs = [];
+                foreach (var (key, value) in stored)
+                {
+                    var owner = plan.Parts.FirstOrDefault(p => p.Key == key) ?? throw new OrchestrationException(OrchestrationError.Integrity);
+                    var proposal = value.Deserialize<ArchitectureProposal>(ArchitectureJson.Options);
+                    if (!ArchitectureValidator.IsValid(proposal, PartScope.Request(Agent(request, analysis), owner, [])))
+                        throw new OrchestrationException(OrchestrationError.Integrity);
+                    outputs[key] = proposal!;
+                }
+            }
             return new ClaimedStep(raw.RunId, raw.AttemptId, raw.Ordinal, raw.Kind, raw.CaseId, request, raw.Steps, analysis, architecture, raw.Decisions,
-                raw.NextVersion);
+                raw.NextVersion, version, raw.Dependencies, plan, part, outputs);
         }
         catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
     }
@@ -166,6 +216,15 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
 
     public Task CompleteArchitectureAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal architecture, CancellationToken ct = default)
         => Complete(attemptId, leaseToken, JsonSerializer.Serialize(architecture, ArchitectureJson.Options), ct);
+
+    public Task CompletePlanningAsync(Guid attemptId, byte[] leaseToken, DecompositionPlan plan, CancellationToken ct = default)
+        => Complete(attemptId, leaseToken, JsonSerializer.Serialize(plan, DecompositionJson.Options), ct);
+
+    public Task CompletePartAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal proposal, CancellationToken ct = default)
+        => Complete(attemptId, leaseToken, JsonSerializer.Serialize(proposal, ArchitectureJson.Options), ct);
+
+    public Task ApprovePlanAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default)
+        => Call("SELECT orchestration.approve_plan(@attempt,@token)::text", ct, P("attempt", attemptId), P("token", leaseToken));
 
     public Task FailAsync(Guid attemptId, byte[] leaseToken, string failureCode, CancellationToken ct = default)
         => Call("SELECT orchestration.fail(@attempt,@token,@failure)::text", ct, P("attempt", attemptId), P("token", leaseToken), P("failure", failureCode));
@@ -264,5 +323,9 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
     }
 
     private sealed record RawClaim(Guid RunId, Guid AttemptId, int Ordinal, StepKind Kind, Guid CaseId, JsonElement Request,
-        IReadOnlyList<WorkflowStep> Steps, JsonElement? Analysis, JsonElement? Architecture, IReadOnlyList<StepDecision>? Decisions, int NextVersion);
+        IReadOnlyList<WorkflowStep> Steps, JsonElement? Analysis, JsonElement? Architecture, IReadOnlyList<StepDecision>? Decisions, int NextVersion,
+        string? WorkflowVersion = null, IReadOnlyList<StepDependency>? Dependencies = null, JsonElement? Plan = null, JsonElement? Part = null,
+        Dictionary<string, JsonElement>? PartOutputs = null);
+
+    private sealed record RawPlan(Guid RunId, JsonElement Plan);
 }

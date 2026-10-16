@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using Factory.Core.Agents;
+using Factory.Core.Architecture;
+using Factory.Core.Decomposition;
 using Factory.Core.Models;
 using Factory.Core.Orchestration;
 using Factory.Orchestration.Agents;
@@ -19,6 +21,8 @@ public enum StepOutcome { Idle, Completed, Failed, Released, Suspended }
 public sealed class DurableWorkflowProcessor
 {
     internal static readonly string[] BudgetOptions = ["continue", "stop"];
+    internal static readonly string[] PlanOptions = ["approve", "stop"];
+    internal const string PlanApproval = "plan_approval";
     private readonly IStepQueue queue;
     private readonly IModelResolver resolver;
 
@@ -37,8 +41,8 @@ public sealed class DurableWorkflowProcessor
         {
             var step = await queue.ClaimAsync(workerId, token, stopping);
             if (step is null) return StepOutcome.Idle;
-            // Defense in depth: the claimed step must be the run's only Running step.
-            if (WorkflowRun.Restore(step.RunId, RunStatus.Running, null, step.Steps).Running?.Ordinal != step.Ordinal)
+            // Defense in depth: the claimed step must be Running in a consistent run.
+            if (!WorkflowRun.Restore(step.RunId, step.WorkflowVersion, RunStatus.Running, null, step.Steps, step.Dependencies ?? []).IsRunning(step.Ordinal))
                 throw new OrchestrationException(OrchestrationError.Integrity);
             using var execution = CancellationTokenSource.CreateLinkedTokenSource(stopping);
             execution.CancelAfter(StepTimeout);
@@ -55,7 +59,7 @@ public sealed class DurableWorkflowProcessor
         Factory.Core.Tenancy.ResolvedModel? resolved = null;
         try
         {
-            if (step.Kind != StepKind.Publication)
+            if (UsesModel(step))
             {
                 resolved = await resolver.ResolveAsync(step, token, CancellationToken.None);
                 // Routing evidence is recorded before the first provider call of the attempt.
@@ -68,8 +72,40 @@ public sealed class DurableWorkflowProcessor
                 identity is null ? null : (input, output) => queue.ReserveCostAsync(step.AttemptId, token, identity, input, output, CancellationToken.None));
             var request = new AgentRequest(step.Request.ProjectId, step.Request.Task, step.Request.Context,
                 step.Request.ConfirmedRequirements?.ToArray());
+            var decomposed = step.WorkflowVersion == WorkflowVersions.Decomposition;
             switch (step.Kind)
             {
+                case StepKind.Planning:
+                    if (step.Analysis is null) throw new OrchestrationException(OrchestrationError.Integrity);
+                    var planning = await new PlannerAgent(metered!).ExecuteAsync(request with { Analysis = step.Analysis }, execution.Token);
+                    if (!planning.Success) return await Fail(Code(planning.FailureKind));
+                    await queue.CompletePlanningAsync(step.AttemptId, token, planning.Plan!, CancellationToken.None);
+                    return StepOutcome.Completed;
+                case StepKind.PlanApproval:
+                    // Nothing runs before a human approves the plan; "stop" cancels the run in the database.
+                    if (step.Decisions?.Any(d => d.Reason == PlanApproval && d.Status == DecisionStatus.Decided && d.Choice == "approve") == true)
+                    {
+                        await queue.ApprovePlanAsync(step.AttemptId, token, CancellationToken.None);
+                        return StepOutcome.Completed;
+                    }
+                    return await Decide(PlanApproval, PlanOptions);
+                case StepKind.Part:
+                    if (step.Analysis is null || step.Plan is null || step.Part is null) throw new OrchestrationException(OrchestrationError.Integrity);
+                    var dependencies = step.Part.DependsOn.Select(key => (step.Plan.Parts[DecompositionPlan.Index(key)],
+                        step.PartOutputs?.GetValueOrDefault(key) ?? throw new OrchestrationException(OrchestrationError.Integrity)));
+                    var part = await new ArchitectAgent(metered!).ExecuteAsync(
+                        PartScope.Request(request with { Analysis = step.Analysis }, step.Part, dependencies), execution.Token);
+                    if (!part.Success) return await Fail(Code(part.FailureKind));
+                    await queue.CompletePartAsync(step.AttemptId, token, part.Architecture!, CancellationToken.None);
+                    return StepOutcome.Completed;
+                case StepKind.Architecture when decomposed:
+                    // Deterministic merge of the approved parts; no model call.
+                    if (step.Analysis is null || step.Plan is null || step.PartOutputs is null) throw new OrchestrationException(OrchestrationError.Integrity);
+                    var merged = ProposalMerger.Merge(step.Plan, step.Plan.Parts.Select(p =>
+                        step.PartOutputs.GetValueOrDefault(p.Key) ?? throw new OrchestrationException(OrchestrationError.Integrity)).ToArray());
+                    if (ArchitectureValidator.GetError(merged, request with { Analysis = step.Analysis }) is not null) return await Fail("integration_failed");
+                    await queue.CompleteArchitectureAsync(step.AttemptId, token, merged, CancellationToken.None);
+                    return StepOutcome.Completed;
                 case StepKind.Analysis:
                     var analysis = await new AnalystAgent(metered!).ExecuteAsync(request, execution.Token);
                     if (!analysis.Success) return await Fail(Code(analysis.FailureKind));
@@ -132,9 +168,11 @@ public sealed class DurableWorkflowProcessor
             return await Fail("generation_failed");
         }
 
-        async Task<StepOutcome> Suspend(string reason)
+        Task<StepOutcome> Suspend(string reason) => Decide(reason, BudgetOptions);
+
+        async Task<StepOutcome> Decide(string reason, IReadOnlyList<string> options)
         {
-            try { await queue.RequestDecisionAsync(step.AttemptId, token, reason, BudgetOptions, CancellationToken.None); return StepOutcome.Suspended; }
+            try { await queue.RequestDecisionAsync(step.AttemptId, token, reason, options, CancellationToken.None); return StepOutcome.Suspended; }
             catch (OrchestrationException wait) when (wait.Error is OrchestrationError.LeaseLost or OrchestrationError.OutcomeUnknown
                 or OrchestrationError.TransactionAborted)
             { return StepOutcome.Released; }
@@ -211,6 +249,14 @@ public sealed class DurableWorkflowProcessor
             return response;
         }
     }
+
+    // Steps that call a model: Analysis, Planning, parts, and Architecture in analysis-architecture-v1.
+    private static bool UsesModel(ClaimedStep step) => step.Kind switch
+    {
+        StepKind.Analysis or StepKind.Planning or StepKind.Part => true,
+        StepKind.Architecture => step.WorkflowVersion != WorkflowVersions.Decomposition,
+        _ => false
+    };
 
     private static string Code(AgentFailureKind? kind) => kind switch
     {

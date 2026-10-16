@@ -21,7 +21,7 @@ GRANT SELECT, INSERT ON orchestration."WorkflowRuns", orchestration."WorkflowSte
     orchestration."StepDecisions" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","FailureCode","WorkItemId","UpdatedAt","CancelledBy","CancelledAt") ON orchestration."WorkflowRuns" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Choice","DecidedBy","DecidedAt") ON orchestration."StepDecisions" TO factory_lifecycle_guard;
-GRANT SELECT, INSERT ON orchestration."ModelCalls", orchestration."StepRoutes" TO factory_lifecycle_guard;
+GRANT SELECT, INSERT ON orchestration."ModelCalls", orchestration."StepRoutes", orchestration."StepDependencies" TO factory_lifecycle_guard;
 GRANT SELECT ON orchestration."ModelPrices", orchestration."Budgets" TO factory_lifecycle_guard;
 -- Customer-declared prices are written only by tenancy.register_model.
 GRANT INSERT ON orchestration."ModelPrices" TO factory_lifecycle_guard;
@@ -41,14 +41,16 @@ GRANT EXECUTE ON FUNCTION orchestration.submit(text,text,text,text,uuid,text,jso
     orchestration.submit_regeneration(text,text,text,text,uuid,uuid,text,text,jsonb),
     orchestration.read_run(text,text,text,text,uuid), orchestration.cancel(text,text,text,text,uuid),
     orchestration.decide(text,text,text,text,uuid,uuid,text), orchestration.authorize_watch(text,text,text,text),
-    orchestration.read_usage(text,text,text,text,timestamptz,timestamptz) TO factory_lifecycle_runtime;
+    orchestration.read_usage(text,text,text,text,timestamptz,timestamptz),
+    orchestration.read_plan(text,text,text,text,uuid) TO factory_lifecycle_runtime;
 GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(uuid,bytea),
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]),
     orchestration.record_model_call(uuid,bytea,text,text,integer,integer,integer,text,uuid),
     orchestration.reserve_cost(uuid,bytea,text,text,integer,integer),
     orchestration.model_for_attempt(uuid,bytea),
-    orchestration.record_route(uuid,bytea,text,text,text,text,text) TO factory_orchestration_worker;
+    orchestration.record_route(uuid,bytea,text,text,text,text,text),
+    orchestration.approve_plan(uuid,bytea) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

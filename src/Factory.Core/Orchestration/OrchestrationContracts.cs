@@ -1,6 +1,7 @@
 using Factory.Core.Analysis;
 using Factory.Core.Architecture;
 using Factory.Core.Authorization;
+using Factory.Core.Decomposition;
 using Factory.Core.Workflows;
 
 namespace Factory.Core.Orchestration;
@@ -75,14 +76,27 @@ public sealed record RunView(Guid RunId, string ProjectId, RunStatus Status, str
 // One leased step. Prior checkpoints are revalidated by the store before they are returned.
 // Decisions are this step's earlier human decisions, so a resumed step can act on them.
 // NextVersion is the review artifact version publication will create (1 for a new work item).
+// decomposition-v1 adds the approved plan, this step's part (Part steps) and the succeeded part
+// proposals by part key (dependencies for a part, all parts for the merge step).
 public sealed record ClaimedStep(Guid RunId, Guid AttemptId, int Ordinal, StepKind Kind, Guid CaseId,
     WorkflowRequest Request, IReadOnlyList<WorkflowStep> Steps, AnalysisResult? Analysis, ArchitectureProposal? Architecture,
-    IReadOnlyList<StepDecision>? Decisions = null, int NextVersion = 1);
+    IReadOnlyList<StepDecision>? Decisions = null, int NextVersion = 1, string WorkflowVersion = WorkflowVersions.AnalysisArchitecture,
+    IReadOnlyList<StepDependency>? Dependencies = null, DecompositionPlan? Plan = null, PlanPart? Part = null,
+    IReadOnlyDictionary<string, ArchitectureProposal>? PartOutputs = null);
+
+// The plan awaiting (or past) approval, with the tier each part would be routed to.
+public sealed record PartRoute(string Key, ModelTier Tier, string Reason);
+public sealed record RunPlan(Guid RunId, DecompositionPlan Plan, IReadOnlyList<PartRoute> Routes, string PolicyVersion);
 
 // API-side port: admission, cancellation, human decisions and safe status reads, authorized per project.
 public interface IWorkflowRunStore
 {
-    Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, CancellationToken ct = default);
+    Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, CancellationToken ct = default)
+        => SubmitAsync(actor, key, request, WorkflowVersions.AnalysisArchitecture, ct);
+    // workflowVersion is analysis-architecture-v1 or decomposition-v1 (the plan needs human approval).
+    Task<RunSubmission> SubmitAsync(TrustedIdentity actor, Guid key, WorkflowRequest request, string workflowVersion, CancellationToken ct = default);
+    // Same audience as GetRunAsync. NotFound until the plan exists (decomposition-v1 runs only).
+    Task<RunPlan> GetPlanAsync(TrustedIdentity actor, string projectId, Guid runId, CancellationToken ct = default);
     // Regenerates an existing work item as the next version of its review case. expectedETag is the
     // work item's current strong ETag; a changed work item or case is StaleRevision (412).
     Task<RunSubmission> SubmitRegenerationAsync(TrustedIdentity actor, Guid key, Guid workItemId, string expectedETag, WorkflowRequest request,
@@ -108,6 +122,10 @@ public interface IStepQueue
     Task RenewAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default);
     Task CompleteAnalysisAsync(Guid attemptId, byte[] leaseToken, AnalysisResult analysis, CancellationToken ct = default);
     Task CompleteArchitectureAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal architecture, CancellationToken ct = default);
+    Task CompletePlanningAsync(Guid attemptId, byte[] leaseToken, DecompositionPlan plan, CancellationToken ct = default);
+    Task CompletePartAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal proposal, CancellationToken ct = default);
+    // Completes plan approval after a recorded "approve" decision and creates the part steps atomically.
+    Task ApprovePlanAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default);
     Task FailAsync(Guid attemptId, byte[] leaseToken, string failureCode, CancellationToken ct = default);
     // The customer model endpoint snapshotted on this attempt's run, or null for the Factory default.
     // Lease-authorized; the credential stays encrypted.

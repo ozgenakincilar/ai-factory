@@ -339,6 +339,23 @@ each point answers an open routing question in the Roadmap and remains open to t
 - Trade-off: with a single configured model every tier maps to it; the evidence still records the
   intended tier, so the gap between intended and actual quality is visible rather than hidden.
 
+## Request decomposition — M8.5b/c (2026-10-16, delegated)
+
+Taken under the same delegated authority; open to the user's review.
+
+- **Merge instead of a new artifact format.** Part proposals are merged into one
+  `ArchitectureProposal` with part-prefixed ids and validated against the full analysis, so review
+  artifacts, publication and human review (M5/M6) stay unchanged. Trade-off: the review artifact does
+  not carry the plan itself; the plan stays readable through the run's plan endpoint.
+- **Fixed ordinals, explicit edges.** Ordinals 0–2 keep their kinds; decomposition steps use 3–16 and
+  execution order comes from dependency rows. analysis-architecture-v1 keeps implicit linear order.
+- **Plan approval only (Q2, review gate).** Plans are approved or stopped, not edited; parts run only
+  the Architect; at most 12 parts and 4 concurrent attempts per run.
+- **Per-step decisions.** One pending decision per step (was per run), so parallel parts can each
+  ask; a run runs again only when no decision is pending.
+- **Failure semantics.** Any failed part fails the run (no partial publication); running siblings
+  lose their lease and their late results are refused.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

@@ -37,18 +37,24 @@ public static class DurableWorkflowEndpoints
     {
         app.MapHub<WorkflowHub>(WorkflowHub.Path).RequireAuthorization();
         var group = app.MapGroup("/api/projects/{projectId}/runs").RequireAuthorization();
+        // workflowVersion "decomposition-v1" selects a decomposed run: the Planner splits the request into
+        // parts; an organization Owner/Admin approves the plan (decision "plan_approval") before parts run
+        // in parallel on their routed models.
         group.MapPost("", (string projectId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor =>
             {
                 var header = http.Request.Headers["Idempotency-Key"];
                 if (header.Count != 1 || !Guid.TryParseExact(header.ToString(), "D", out var key) || key == Guid.Empty)
                     return Error(400, "invalid_idempotency_key");
-                var command = await LifecycleEndpoints.Read(http, projectId, null, null, key);
-                var submission = await store.SubmitAsync(actor, key, command.Request, http.RequestAborted);
+                var command = await LifecycleEndpoints.Read(http, projectId, null, null, key, allowDecomposition: true);
+                var submission = await store.SubmitAsync(actor, key, command.Request, command.WorkflowVersion, http.RequestAborted);
                 http.Response.Headers.Location = $"/api/projects/{Uri.EscapeDataString(projectId)}/runs/{submission.RunId:D}";
                 if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
                 return Results.Json(submission, statusCode: 202);
             }));
+        // The plan with each part's routed tier, for the approval popup. Same audience as the run.
+        group.MapGet("/{runId:guid}/plan", (string projectId, Guid runId, HttpContext http, IWorkflowRunStore store, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await store.GetPlanAsync(actor, projectId, runId, http.RequestAborted))));
         // Customer-provided models: organization Owner/Admin only. API keys are write-only.
         app.MapPost("/api/organizations/{organizationId}/models", (string organizationId, ModelRegistrationBody body, HttpContext http,
             Factory.Core.Tenancy.IModelRegistryStore store, Factory.Infrastructure.Security.ModelEndpointPolicy policy, FactoryAuthSettings auth)

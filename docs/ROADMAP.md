@@ -86,8 +86,9 @@ Status: plan approved 2026-10-15 in five phases; **M8.1 usage metering committed
 **M8.2 tenancy committed as `4c7789d`**; **M8.3 budgets and reservations committed as `2564a85`**;
 **M8.4a customer-provided OpenAI-compatible models committed as `c7eb11d`**; **M8.4b Anthropic
 provider committed as `8d0f3d6`** (live call pending account credit); **M8.5a model routing policy
-implemented** (tiers, deterministic rules, per-attempt evidence); M8.5b decomposition and M8.5c
-parallel parts designed, not implemented; see [Cost Controls](COST_CONTROLS.md).
+committed as `fe83818`**; **M8.5b request decomposition with plan approval and M8.5c parallel parts
+implemented** (local candidate); see [Cost Controls](COST_CONTROLS.md). All M8 phases are now
+implemented; no live decomposed run has been verified.
 Priority: **P0**. Original estimate: **2–3 weeks**; the approved scope substantially exceeds it.
 
 Goal: Establish organization/project isolation and observable, limited AI spending.

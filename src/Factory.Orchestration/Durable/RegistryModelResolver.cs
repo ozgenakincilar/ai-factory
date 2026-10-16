@@ -38,7 +38,8 @@ public sealed class RegistryModelResolver(IStepQueue queue, ModelCatalog catalog
 
     public async Task<ResolvedModel> ResolveAsync(ClaimedStep step, byte[] leaseToken, CancellationToken ct)
     {
-        var route = ModelRoutingPolicy.Route(step.Kind);
+        // Parts are routed by their approved classification; other steps by their role.
+        var route = step.Part is { } part ? ModelRoutingPolicy.Route(step.Kind, part.Complexity, part.Importance) : ModelRoutingPolicy.Route(step.Kind);
         var endpoint = await queue.GetModelEndpointAsync(step.AttemptId, leaseToken, ct);
         if (endpoint is null)
         {

@@ -71,7 +71,10 @@ public static class LifecycleEndpoints
     }
 
     // Shared with durable workflow admission: same strict body contract and limits.
-    internal static async Task<GenerationCommand> Read(HttpContext http, string project, Guid? workItem, string? tag, Guid key)
+    // allowDecomposition: durable creation may also select workflow decomposition-v1; its input bounds
+    // are the same as the M6 workflow's.
+    internal static async Task<GenerationCommand> Read(HttpContext http, string project, Guid? workItem, string? tag, Guid key,
+        bool allowDecomposition = false)
     {
         if (!http.Request.HasJsonContentType()) throw new LifecycleException(LifecycleError.InvalidCommand);
         var buffer = new byte[LifecycleLimits.RequestBytes + 1]; var length = 0;
@@ -97,9 +100,11 @@ public static class LifecycleEndpoints
                     confirmed.Add(new(source.GetProperty("id").GetString()!, source.GetProperty("description").GetString()!));
                 }
             }
-            var result = new GenerationCommand(key, workItem, tag, root.GetProperty("workflowVersion").GetString()!,
+            var version = root.GetProperty("workflowVersion").GetString()!;
+            var decomposed = allowDecomposition && version == Factory.Core.Orchestration.WorkflowVersions.Decomposition;
+            var result = new GenerationCommand(key, workItem, tag, decomposed ? LifecycleLimits.WorkflowVersion : version,
                 new WorkflowRequest(project, root.GetProperty("task").GetString()!, root.GetProperty("context").GetString()!, confirmed));
-            GenerationFingerprint.Validate(result); return result;
+            GenerationFingerprint.Validate(result); return decomposed ? result with { WorkflowVersion = version } : result;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         { throw new LifecycleException(LifecycleError.InvalidCommand); }

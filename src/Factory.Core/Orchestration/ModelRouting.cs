@@ -24,10 +24,14 @@ public static class ModelRoutingPolicy
     public const string CustomerModel = "customer_model";
 
     // Architecture decisions bound every later artifact, so the Architect never runs below Strong.
+    // Steps without model calls (plan approval, publication) have no route.
     public static ModelTier MinimumTier(StepKind kind) => kind switch
     {
         StepKind.Analysis => ModelTier.Standard,
         StepKind.Architecture => ModelTier.Strong,
+        // The plan bounds every part, so planning runs Strong; parts are routed by classification.
+        StepKind.Planning => ModelTier.Strong,
+        StepKind.Part => ModelTier.Economy,
         _ => throw new OrchestrationException(OrchestrationError.InvalidCommand)
     };
 

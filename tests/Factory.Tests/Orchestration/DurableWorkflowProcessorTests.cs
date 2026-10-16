@@ -265,7 +265,7 @@ public class DurableWorkflowProcessorTests
         Assert.Equal(2600, DurableWorkflowProcessor.EstimateInputTokens(request));
     }
 
-    private sealed class Provider : IModelProvider
+    internal sealed class Provider : IModelProvider
     {
         internal int Calls; internal string? Content; internal bool Throw; internal Action? OnCall; internal Task? Wait; internal int? MaxOutput;
         internal ModelUsage? Usage; internal ModelResponseStatus Status = ModelResponseStatus.Completed;
@@ -283,7 +283,7 @@ public class DurableWorkflowProcessorTests
         }
     }
 
-    private sealed class Queue : IStepQueue
+    internal sealed class Queue : IStepQueue
     {
         internal ClaimedStep? Next; internal byte[]? Token; internal string? Failure; internal OrchestrationError? PublishError;
         internal AnalysisResult? Analysis; internal ArchitectureProposal? Architecture;
@@ -299,6 +299,13 @@ public class DurableWorkflowProcessorTests
         { Analysis = analysis; return Task.CompletedTask; }
         public Task CompleteArchitectureAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal architecture, CancellationToken ct = default)
         { Architecture = architecture; return Task.CompletedTask; }
+        internal Factory.Core.Decomposition.DecompositionPlan? Plan; internal ArchitectureProposal? Part; internal bool Approved;
+        public Task CompletePlanningAsync(Guid attemptId, byte[] leaseToken, Factory.Core.Decomposition.DecompositionPlan plan, CancellationToken ct = default)
+        { Plan = plan; return Task.CompletedTask; }
+        public Task CompletePartAsync(Guid attemptId, byte[] leaseToken, ArchitectureProposal proposal, CancellationToken ct = default)
+        { Part = proposal; return Task.CompletedTask; }
+        public Task ApprovePlanAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default)
+        { Approved = true; return Task.CompletedTask; }
         public Task FailAsync(Guid attemptId, byte[] leaseToken, string failureCode, CancellationToken ct = default)
         {
             // A lost lease makes the recorded failure impossible; the database state decides.

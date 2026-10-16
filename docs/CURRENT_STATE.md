@@ -29,8 +29,10 @@ SSRF-guarded egress, no silent fallback) is committed and pushed as `c7eb11d` (8
 credentials, verified Claude Haiku 5.5 price as an upper bound) is committed and pushed as `8d0f3d6`
 (841 passed); no live Anthropic generation call yet (the account has no credit). M8.5a (model
 routing policy: tiers, deterministic role/complexity/importance rules, per-attempt route evidence)
-is a local candidate verified with **853 passed, 0 failed, 0 skipped**. Future commits and pushes
-require explicit approval.
+is committed and pushed as `fe83818` (853 passed). M8.5b/c (decomposition-v1: Planner, blocking plan
+approval, parallel part steps on routed tiers, deterministic merge into the unchanged artifact
+format) is a local candidate verified with **881 passed, 0 failed, 0 skipped**; no live decomposed
+run yet. Future commits and pushes require explicit approval.
 
 ## Milestone 8.1 current handoff
 
@@ -236,7 +238,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 8.3 | Committed/pushed budgets, reservations, retired sync generation, durable regeneration, 2564a85 (786 passed), see COST_CONTROLS.md |
 | 8.4a | Committed/pushed customer-provided OpenAI-compatible models, c7eb11d (828 passed), see COST_CONTROLS.md |
 | 8.4b | Committed/pushed Anthropic provider, 8d0f3d6 (841 passed; live call pending account credit), see COST_CONTROLS.md |
-| 8.5a | Local candidate: model routing policy and route evidence (853 passed), see COST_CONTROLS.md |
+| 8.5a | Committed/pushed model routing policy and route evidence, fe83818 (853 passed), see COST_CONTROLS.md |
+| 8.5b/c | Local candidate: request decomposition, plan approval, parallel parts (881 passed), see COST_CONTROLS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

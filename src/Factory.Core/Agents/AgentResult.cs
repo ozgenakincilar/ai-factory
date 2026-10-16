@@ -9,7 +9,8 @@ public sealed record AgentResult(
     string? Error = null,
     AnalysisResult? Analysis = null,
     AgentFailureKind? FailureKind = null,
-    ArchitectureProposal? Architecture = null);
+    ArchitectureProposal? Architecture = null,
+    Factory.Core.Decomposition.DecompositionPlan? Plan = null);
 
 public enum AgentFailureKind
 {

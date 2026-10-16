@@ -2,8 +2,9 @@
 
 Status: M7.1 committed and pushed as `bcd50fa`; M7.2 as `9cee79c`; M7.3 as `73f83ab`. M7.2 (human-decision waiting and cancellation)
 implemented and verified on 2026-10-15 under the user's full approval; see
-[M7.2](#milestone-72--waiting-for-human-decisions-and-cancellation). Parallel steps are deferred
-to M8 (see [Architectural Decisions](DECISIONS.md#milestone-72-scope-2026-10-15)). M7.3 (real-time
+[M7.2](#milestone-72--waiting-for-human-decisions-and-cancellation). Parallel steps were deferred
+to M8 (see [Architectural Decisions](DECISIONS.md#milestone-72-scope-2026-10-15)) and arrived with
+decomposition-v1 in [M8.5b/c](COST_CONTROLS.md#m85bm85c--request-decomposition-and-parallel-parts). M7.3 (real-time
 push) is implemented; see [M7.3](#milestone-73--real-time-run-change-notifications). This document describes inspected code and executed local verification,
 not production readiness. Sections up to "Limits" describe M7.1.
 

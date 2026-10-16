@@ -3,9 +3,9 @@
 Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#milestone-8-plan-2026-10-15-user-approved)).
 **M8.1 usage metering committed and pushed as `7da963f`; M8.2 tenancy as `4c7789d`; M8.3 budgets,
 retired synchronous generation and durable regeneration as `2564a85`; M8.4a customer-provided
-OpenAI-compatible models as `c7eb11d`; M8.4b Anthropic provider as `8d0f3d6`. M8.5a model routing
-policy implemented as a local candidate** ([M8.5a](#m85a--model-routing-policy)). M8.5b request
-decomposition with plan approval and M8.5c parallel parts are designed below, not implemented.
+OpenAI-compatible models as `c7eb11d`; M8.4b Anthropic provider as `8d0f3d6`; M8.5a model routing
+policy as `fe83818`. M8.5b request decomposition with plan approval and M8.5c parallel parts are
+implemented as a local candidate** ([M8.5b/c](#m85bm85c--request-decomposition-and-parallel-parts)).
 This document describes inspected code and executed local verification, not production readiness.
 
 ## M8.1 — Usage metering
@@ -434,31 +434,71 @@ view, lease/token/validation checks, write-once and immutable evidence, and role
 - Tier mappings are per worker process; workers with different mappings route differently (each
   route records what was used).
 
-## M8.5b/M8.5c — Request decomposition and parallel parts (design, not implemented)
+## M8.5b/M8.5c — Request decomposition and parallel parts
 
-Proposed under delegated authority on 2026-10-16; not implemented. It changes the review artifact
-format and the workflow aggregate, so it is recorded for review before implementation.
+Additive migration `20261016110000_Decomposition` (embedded `Decomposition.sql`). Decisions:
+[M8.5b/c decision](DECISIONS.md#request-decomposition--m85bc-2026-10-16-delegated).
 
-- **Workflow `decomposition-v1`.** Analysis (whole request) → Planning → plan approval → part
-  steps (parallel where independent) → Publication. The existing `analysis-architecture-v1`
-  workflow stays unchanged and remains the default.
-- **Planning (M8.5b).** A Planner agent (role minimum Strong) returns a strict-schema
-  `DecompositionPlan`: 1–12 parts, each with key, title, scope, the functional requirement ids it
-  covers, complexity, importance and dependencies. Validation: unique keys, acyclic dependencies,
-  every functional requirement covered, no unknown ids. Invalid plans fail the step explicitly.
+- **Workflow `decomposition-v1`.** Selected per run with `"workflowVersion": "decomposition-v1"` on
+  `POST /api/projects/{projectId}/runs` (input bounds unchanged; `analysis-architecture-v1` stays the
+  default and unchanged). Steps: Analysis (0) → Planning (3) → PlanApproval (4) → Part steps (5–16)
+  → merge (Architecture, 1) → Publication (2). Ordinals 0–2 keep their kinds in every version, so the
+  review artifact format and publication are unchanged; execution order comes from explicit
+  dependencies (`orchestration."StepDependencies"`, append-only).
+- **Planning.** `PlannerAgent` (role minimum Strong) returns a strict-schema plan: 1–12 parts keyed
+  P1..Pn, each with title, scope, the functional requirement ids it covers, complexity
+  (low/medium/high), importance (normal/high) and dependencies on earlier parts only (acyclic by
+  construction). Every requirement must be covered; unknown ids are rejected. C# and the database
+  (`orchestration.valid_plan`) validate the same rules; an invalid plan fails the run explicitly.
 - **Plan approval.** The run waits on decision `plan_approval` (`approve` / `stop`) — the existing
-  blocking popup with no timeout. The popup shows the parts, their classification and the tier and
-  model each part would use (`ModelRoutingPolicy` with the part's complexity and importance).
-  Nothing executes before approval; `stop` cancels the run.
-- **Parts (M8.5c).** Approval materializes one `PartDesign` step per part, with dependency edges.
-  A step is claimable when all its dependencies succeeded; at most 4 attempts of one run run at
-  once. Each part runs the Architect on the part's scope plus the outputs of its dependencies and
-  writes only its own checkpoint, so no aggregate is modified concurrently (DDD rule). Publication
-  runs once after every part succeeded.
-- **Database.** Version-aware step kinds and ordinals, a `StepDependencies` table, a per-step
-  (not per-run) running-attempt constraint, and a generalized deferred run check; the claim
-  function respects dependencies and the per-run concurrency cap.
-- **Review artifact v2.** One case per run whose artifact holds the analysis, the approved plan
-  and the part proposals with their routes; v1 artifacts stay readable and immutable.
-- **Open for review.** Whether parts should also run the Analyst; the part limit and concurrency
-  cap; whether the plan may be edited by the customer instead of only approved or stopped.
+  blocking popup with no timeout, decided by an organization Owner/Admin. `GET
+  /api/projects/{projectId}/runs/{runId}/plan` (same audience as the run) returns the plan and each
+  part's routed tier. Run views never include plan text. `stop` cancels the run before any part runs.
+  `approve` lets the worker complete the approval step, which creates every part step and its edges
+  in one transaction from the stored, revalidated plan.
+- **Parts in parallel.** A part becomes claimable when its dependencies succeeded; at most four
+  attempts of one run run at once (database-enforced; analysis-architecture-v1 keeps one). Each part
+  runs the Architect on the part's requirements only, with its dependencies' proposal summaries as
+  context, on the tier `ModelRoutingPolicy` gives its classification (Economy is reachable here).
+  Parts write only their own step checkpoint; no aggregate is modified concurrently.
+- **Merge.** After every part succeeded, the Architecture step deterministically merges the part
+  proposals (ids prefixed with the part key, provenance unchanged) and validates the result against
+  the full analysis; failure is `integration_failed`. Publication then runs as before.
+- **Failures and decisions.** A failed part fails the run, ends running siblings' leases and cancels
+  pending decisions. Budget or customer-model decisions are per step: while one part waits, running
+  siblings may finish but nothing new starts until every pending decision is made.
+
+### Executed verification — 2026-10-16
+
+SDK 10.0.103, local candidate on top of `fe83818`; no live LLM calls.
+
+1. Migration replayed inside `BEGIN … ROLLBACK` on `factory_m86_verify_20261016`, then applied by
+   the initializer to it and to `factory_m7_verify_20261015` (upgrade).
+2. While writing tests: three assertion mistakes in new unit tests (tuple comparison of collections
+   by reference, and expecting `InvalidCommand` where a second approval correctly returns
+   `Conflict`) were corrected; then 66 unit tests and a targeted orchestration run of 125 passed.
+3. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **881 passed, 0 failed, 0 skipped** (853 + 28 new), including four live
+   Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_04_03_32.trx`,
+   SHA-256 `a2cd3a86af52a414ba000cf1fde0fcd9d0ea0e88229c750bf94c89c841c94bc4`.
+   Solution-wide vulnerable-package scan: none.
+
+New cases cover plan validation (keys, dependencies, coverage, limits, classifications), part
+scoping, merging into a proposal valid for the full analysis, the Planner, the generalized
+aggregate (parallel start, concurrency bound, approval atomicity, failure cancelling siblings,
+waiting with running siblings), approval and merge in the processor, part routing per
+classification, and against PostgreSQL: an end-to-end decomposed run with two parts held by two
+workers at once and the merged proposal published under the unchanged artifact format; stop before
+any part; an invalid plan failing without a decision; a failing part ending its sibling's lease;
+database plan revalidation, approval without an "approve" decision refused, plan access limited to
+the project and role separation; HTTP selection and the plan endpoint.
+
+### M8.5b/c limits
+
+- Durable regeneration still runs `analysis-architecture-v1` from the API (the database accepts
+  both versions).
+- The customer can approve or stop a plan, not edit it. Parts run only the Architect, not the Analyst.
+- No live run of the Planner or of parts has been verified; real model plans may be rejected more
+  often than the deterministic test model's.
+- A worker claim skips a run whose row another claim holds at that instant; it finds the run on its
+  next poll (parallelism is eventual, not instantaneous).
