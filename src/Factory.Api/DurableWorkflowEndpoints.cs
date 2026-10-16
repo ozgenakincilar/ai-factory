@@ -17,6 +17,7 @@ public static class DurableWorkflowEndpoints
         builder.Services.AddSingleton<Factory.Core.Tenancy.ITenantUsageStore>(store);
         builder.Services.AddSingleton<Factory.Core.Tenancy.IModelRegistryStore>(store);
         builder.Services.AddSingleton<Factory.Core.Tenancy.IWorkspaceDirectory>(store);
+        builder.Services.AddSingleton<Factory.Core.Execution.IVerificationJobs>(store);
         var policy = Factory.Infrastructure.Security.ModelEndpointPolicy.FromConfiguration(
             builder.Configuration.GetValue<bool>(Factory.Infrastructure.Security.ModelEndpointPolicy.Setting),
             builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"));
@@ -140,6 +141,60 @@ public static class DurableWorkflowEndpoints
             IWorkflowRunStore store, FactoryAuthSettings auth)
             => Run(http, auth, async actor => Results.Json(await store.DecideAsync(actor, projectId, runId, decisionId,
                 await ReadChoice(http), http.RequestAborted))));
+
+        // M9.3 verification jobs: a Generator asks for an application to be generated from a registered
+        // template and verified offline in the sandbox by a worker. Same audiences as runs.
+        var verifications = app.MapGroup("/api/projects/{projectId}/verifications").RequireAuthorization();
+        verifications.MapPost("", (string projectId, HttpContext http, Factory.Core.Execution.IVerificationJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var header = http.Request.Headers["Idempotency-Key"];
+                if (header.Count != 1 || !Guid.TryParseExact(header.ToString(), "D", out var key) || key == Guid.Empty)
+                    return Error(400, "invalid_idempotency_key");
+                var submission = await jobs.SubmitVerificationAsync(actor, projectId, key, await ReadVerification(http), http.RequestAborted);
+                http.Response.Headers.Location = $"/api/projects/{Uri.EscapeDataString(projectId)}/verifications/{submission.JobId:D}";
+                if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
+                return Results.Json(submission, statusCode: 202);
+            }));
+        verifications.MapGet("", (string projectId, HttpContext http, Factory.Core.Execution.IVerificationJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await jobs.ListVerificationsAsync(actor, projectId, http.RequestAborted))));
+        verifications.MapGet("/{jobId:guid}", (string projectId, Guid jobId, HttpContext http, Factory.Core.Execution.IVerificationJobs jobs,
+            FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await jobs.GetVerificationAsync(actor, projectId, jobId, http.RequestAborted))));
+        // The exact evidence bytes; the ETag carries their SHA-256 for independent checks.
+        verifications.MapGet("/{jobId:guid}/evidence", (string projectId, Guid jobId, HttpContext http, Factory.Core.Execution.IVerificationJobs jobs,
+            FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var bytes = await jobs.GetVerificationEvidenceAsync(actor, projectId, jobId, http.RequestAborted);
+                http.Response.Headers.ETag = "\"sha256-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) + "\"";
+                return Results.Bytes(bytes, "application/json; charset=utf-8");
+            }));
+    }
+
+    // Strict body: exactly {"templateId","templateVersion","applicationName"} as strings, at most 2 KiB.
+    private static async Task<Factory.Core.Execution.VerificationRequest> ReadVerification(HttpContext http)
+    {
+        if (!http.Request.HasJsonContentType()) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        var buffer = new byte[2049]; var length = 0;
+        while (length < buffer.Length)
+        {
+            var count = await http.Request.Body.ReadAsync(buffer.AsMemory(length), http.RequestAborted);
+            if (count == 0) break; length += count;
+        }
+        if (length > 2048) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(buffer.AsMemory(0, length), new System.Text.Json.JsonDocumentOptions { MaxDepth = 2 });
+            var fields = document.RootElement.EnumerateObject().ToDictionary(f => f.Name, f => f.Value, StringComparer.Ordinal);
+            string Field(string name) => fields.TryGetValue(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String
+                ? value.GetString()! : throw new OrchestrationException(OrchestrationError.InvalidCommand);
+            if (fields.Count != 3) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+            return new Factory.Core.Execution.VerificationRequest(Field("templateId"), Field("templateVersion"), Field("applicationName")).Validate();
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or ArgumentException
+            or Factory.Core.Templates.TemplateException)
+        { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
     }
 
     // Strict body: exactly {"choice": "<code>"}, at most 1 KiB.

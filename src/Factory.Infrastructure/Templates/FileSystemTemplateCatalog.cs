@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Factory.Core.Execution;
 using Factory.Core.Templates;
 
 namespace Factory.Infrastructure.Templates;
@@ -7,7 +8,7 @@ namespace Factory.Infrastructure.Templates;
 // Minimal template registry: <root>/registry.json lists template versions and their content hash;
 // each version's files live in <root>/<directory>. Loading verifies the hash, so a changed or
 // tampered template is refused instead of generating something unreviewed.
-public sealed class FileSystemTemplateCatalog(string root)
+public sealed class FileSystemTemplateCatalog(string root) : ITemplateCatalog
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);

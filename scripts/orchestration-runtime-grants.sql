@@ -27,6 +27,9 @@ GRANT SELECT ON orchestration."ModelPrices", orchestration."Budgets" TO factory_
 GRANT INSERT ON orchestration."ModelPrices" TO factory_lifecycle_guard;
 GRANT SELECT, INSERT ON orchestration."CostReservations" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Attempts","Output") ON orchestration."WorkflowSteps" TO factory_lifecycle_guard;
+-- M9.3 verification jobs and evidence (evidence is insert-only).
+GRANT SELECT, INSERT ON orchestration."VerificationJobs", orchestration."VerificationEvidence" TO factory_lifecycle_guard;
+GRANT UPDATE ("Status","FailureCode","Attempts","WorkerId","TokenHash","LeaseExpiresAt","UpdatedAt") ON orchestration."VerificationJobs" TO factory_lifecycle_guard;
 GRANT UPDATE ("Outcome","FailureCode","FinishedAt","LeaseExpiresAt") ON orchestration."StepAttempts" TO factory_lifecycle_guard;
 -- The guard owns the functions so managed publication passes the M6 case-mode guard.
 GRANT CREATE ON SCHEMA orchestration TO factory_lifecycle_guard;
@@ -42,7 +45,9 @@ GRANT EXECUTE ON FUNCTION orchestration.submit(text,text,text,text,uuid,text,jso
     orchestration.read_run(text,text,text,text,uuid), orchestration.cancel(text,text,text,text,uuid),
     orchestration.decide(text,text,text,text,uuid,uuid,text), orchestration.authorize_watch(text,text,text,text),
     orchestration.read_usage(text,text,text,text,timestamptz,timestamptz),
-    orchestration.read_plan(text,text,text,text,uuid), orchestration.list_runs(text,text,text,text) TO factory_lifecycle_runtime;
+    orchestration.read_plan(text,text,text,text,uuid), orchestration.list_runs(text,text,text,text),
+    orchestration.submit_verification(text,text,text,text,uuid,text,text,text), orchestration.list_verifications(text,text,text,text),
+    orchestration.read_verification(text,text,text,text,uuid), orchestration.read_verification_evidence(text,text,text,text,uuid) TO factory_lifecycle_runtime;
 GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(uuid,bytea),
     orchestration.complete(uuid,bytea,jsonb), orchestration.fail(uuid,bytea,text),
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]),
@@ -50,7 +55,9 @@ GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(u
     orchestration.reserve_cost(uuid,bytea,text,text,integer,integer),
     orchestration.model_for_attempt(uuid,bytea),
     orchestration.record_route(uuid,bytea,text,text,text,text,text),
-    orchestration.approve_plan(uuid,bytea) TO factory_orchestration_worker;
+    orchestration.approve_plan(uuid,bytea),
+    orchestration.claim_verification(text,bytea), orchestration.renew_verification(uuid,bytea),
+    orchestration.complete_verification(uuid,bytea,bytea), orchestration.fail_verification(uuid,bytea,text) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

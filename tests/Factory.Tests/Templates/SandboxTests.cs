@@ -28,7 +28,9 @@ public class SandboxConfigurationTests
         Assert.Equal("2", After("--cpus"));
         Assert.Contains("/work:rw,exec,nosuid,nodev,size=1024m,uid=10001,gid=10001,mode=0700", args);
         Assert.Contains("/tmp:rw,nosuid,nodev,size=512m,mode=1777", args);
-        Assert.Equal([Image, "sleep", "infinity"], args.TakeLast(3));
+        Assert.Contains("--rm", args);
+        // Bounded lifetime: job timeout (20 min) plus grace, so orphaned sandboxes end themselves.
+        Assert.Equal([Image, "sleep", "1260"], args.TakeLast(3));
         // Nothing from the host: no bind mounts, volumes, environment, privileges or host namespaces.
         Assert.DoesNotContain(args, a => a is "-v" or "--volume" or "--mount" or "-e" or "--env" or "--env-file" or "--privileged" or "--pid");
         Assert.DoesNotContain(args, a => a.Contains("docker.sock", StringComparison.Ordinal) || a.StartsWith("host", StringComparison.Ordinal));
@@ -229,6 +231,30 @@ public class SandboxIsolationTests
         Assert.InRange(step.Output.Length, 1, 16 * 1024 + 64);
         Assert.StartsWith("FIRST-LINE", step.Output);
         Assert.EndsWith("LAST-LINE\n", step.Output);
+    }
+
+    [SandboxFact]
+    public async Task SandboxesOrphanedByACrashedWorker_EndThemselves()
+    {
+        // A worker that dies after start never runs its cleanup; simulate that by never removing.
+        var name = "factory-sbx-orphan-" + Guid.NewGuid().ToString("N");
+        var limits = Small(stepSeconds: 5) with { JobTimeout = TimeSpan.FromSeconds(5) };
+        Assert.Equal(0, Docker([.. DockerSandbox.CreateArguments(name, new DockerSandboxOptions(Image, limits))]));
+        Assert.Equal(0, Docker("start", name));
+        Assert.Equal(1, LeftoverSandboxes());
+        var deadline = DateTime.UtcNow.AddSeconds(5 + DockerSandbox.OrphanGraceSeconds + 30);
+        while (LeftoverSandboxes() > 0 && DateTime.UtcNow < deadline) await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.Equal(0, LeftoverSandboxes());
+    }
+
+    private static int Docker(params string[] arguments)
+    {
+        var start = new ProcessStartInfo("docker") { RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var a in arguments) start.ArgumentList.Add(a);
+        using var process = Process.Start(start)!;
+        process.StandardOutput.ReadToEnd(); process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return process.ExitCode;
     }
 
     [SandboxFact]

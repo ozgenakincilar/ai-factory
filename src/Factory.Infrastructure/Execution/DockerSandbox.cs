@@ -27,10 +27,13 @@ public sealed partial record DockerSandboxOptions(string Image, SandboxLimits Li
 // One container per job: created with no network, a read-only root filesystem, a non-root user,
 // no capabilities, no new privileges, CPU/memory/PID limits and size-limited tmpfs mounts for the
 // workspace and temp files. Steps run through `docker exec`, so each exit code comes from the Docker
-// daemon rather than from output the untrusted code could forge. The container is always removed.
+// daemon rather than from output the untrusted code could forge. The container is always removed,
+// by this class or, if the worker dies, by Docker once its bounded lifetime ends.
 public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
 {
     private readonly DockerSandboxOptions _options = options.Validate();
+
+    public const int OrphanGraceSeconds = 60;
 
     public static IReadOnlyList<string> CreateArguments(string name, DockerSandboxOptions options)
     {
@@ -38,7 +41,7 @@ public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
         var uid = DockerSandboxOptions.RunnerUid.ToString(CultureInfo.InvariantCulture);
         return
         [
-            "create", "--name", name, "--init",
+            "create", "--name", name, "--init", "--rm",
             "--network", "none", "--read-only", "--ipc", "none",
             "--user", uid + ":" + uid, "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "--cpus", l.Cpus.ToString(CultureInfo.InvariantCulture),
@@ -47,7 +50,9 @@ public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
             "--tmpfs", $"/tmp:rw,nosuid,nodev,size={l.TempMb}m,mode=1777",
             "--tmpfs", $"{SandboxStep.Root}:rw,exec,nosuid,nodev,size={l.WorkspaceMb}m,uid={uid},gid={uid},mode=0700",
             "--label", "factory.sandbox=1",
-            options.Image, "sleep", "infinity",
+            // The container ends itself after the job timeout, so a sandbox orphaned by a crashed worker
+            // (whose cleanup never ran) is stopped and removed (--rm) instead of living forever.
+            options.Image, "sleep", ((int)Math.Ceiling(l.JobTimeout.TotalSeconds) + OrphanGraceSeconds).ToString(CultureInfo.InvariantCulture),
         ];
     }
 

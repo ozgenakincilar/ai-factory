@@ -48,7 +48,9 @@ Docker case that builds and tests a generated application; see
 [Templates and Execution](TEMPLATES_AND_EXECUTION.md). M9.2 (runner image with offline package caches,
 `DockerSandbox` with no network, read-only root, non-root user, capability/privilege drops,
 CPU/memory/PID/disk/time/output limits, exec-reported exit codes) is verified with 930 passed including
-8 Docker isolation cases. M9.3 is planned.
+8 Docker isolation cases. M9.3 (durable verification jobs, immutable hashed evidence, worker/API/
+Product Workspace integration, self-ending orphaned sandboxes) is verified with 937 passed, 19 web tests, a
+real-browser end-to-end verification and a live worker-crash recovery; Git workspaces are deferred to M10.
 
 ## Milestone 8.1 current handoff
 
@@ -259,7 +261,8 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 12a | Committed/pushed Product Workspace slice, 8d30e71 (885 passed, 8 web tests, browser e2e), see PRODUCT_WORKSPACE.md |
 | 12b | Committed/pushed review page, a93f1bd (885 passed, 15 web tests, browser e2e with approval), see PRODUCT_WORKSPACE.md |
 | 9.1 | Committed/pushed starter template, registry, deterministic generation, 9bbdec7 (913 passed), see TEMPLATES_AND_EXECUTION.md |
-| 9.2 | Offline sandbox runner and isolation tests (930 passed incl. 8 Docker isolation cases), see TEMPLATES_AND_EXECUTION.md |
+| 9.2 | Committed/pushed offline sandbox runner, d97e9c5 (930 passed), see TEMPLATES_AND_EXECUTION.md |
+| 9.3 | Verification jobs and immutable evidence (937 passed, 19 web tests, browser e2e, crash recovery), see TEMPLATES_AND_EXECUTION.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

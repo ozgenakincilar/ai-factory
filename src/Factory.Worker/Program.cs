@@ -75,4 +75,20 @@ builder.Services.AddSingleton(sp => new DurableWorkflowProcessor(sp.GetRequiredS
         protector is null ? null : new CustomerModelProviderFactory(protector, policy))));
 builder.Services.AddHostedService<WorkflowWorkerService>();
 
+// M9.3 verification jobs (opt-in): Templates:Root is the registry directory and
+// Verification:RunnerImage the immutable runner image id (scripts/Build-FactoryRunner.ps1).
+if (builder.Configuration.GetValue<bool>("Verification:Enabled"))
+{
+    var templates = builder.Configuration["Templates:Root"];
+    var runner = builder.Configuration["Verification:RunnerImage"];
+    if (string.IsNullOrWhiteSpace(templates) || string.IsNullOrWhiteSpace(runner))
+        throw new InvalidOperationException("Verification needs Templates:Root and Verification:RunnerImage.");
+    var store = new PostgresOrchestrationStore(connection);
+    builder.Services.AddSingleton(new Factory.Orchestration.Verification.VerificationProcessor(store,
+        new Factory.Infrastructure.Templates.FileSystemTemplateCatalog(templates),
+        new Factory.Infrastructure.Execution.DockerSandbox(new Factory.Infrastructure.Execution.DockerSandboxOptions(runner,
+            Factory.Core.Execution.SandboxLimits.Default))));
+    builder.Services.AddHostedService<VerificationWorkerService>();
+}
+
 builder.Build().Run();

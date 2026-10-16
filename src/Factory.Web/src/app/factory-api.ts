@@ -33,6 +33,26 @@ export interface ConfirmedRequirement { id: string; description: string; }
 export interface RunRequest { task: string; context: string; confirmedRequirements: ConfirmedRequirement[] | null; workflowVersion: string; }
 export interface RunSubmission { runId: string; status: RunStatus; replayed: boolean; }
 
+// Verification jobs (M9.3): a generated starter application verified offline in the sandbox.
+export const starterTemplate = { id: 'dotnet-angular-postgres-ddd', version: '1.0.0' } as const;
+export type VerificationStatus = 'queued' | 'running' | 'passed' | 'failed' | 'timedOut' | 'sandboxError';
+export interface VerificationSummary {
+  jobId: string; templateId: string; templateVersion: string; applicationName: string; status: VerificationStatus;
+  failureCode: string | null; attempts: number; createdAt: string; updatedAt: string;
+}
+export interface SandboxStepResult { name: string; outcome: 'passed' | 'failed' | 'timedOut' | 'skipped'; exitCode: number | null; duration: string; output: string; outputTruncated: boolean; }
+export interface SandboxReport {
+  runnerImage: string; workspaceSha256: string; outcome: 'passed' | 'failed' | 'timedOut' | 'sandboxError'; failureCode: string | null;
+  startedAt: string; duration: string; steps: SandboxStepResult[];
+  limits: { cpus: number; memoryMb: number; pids: number; workspaceMb: number; tempMb: number; stepTimeout: string; jobTimeout: string; outputBytes: number };
+}
+export interface VerificationEvidence {
+  formatVersion: number; jobId: string; projectId: string; templateId: string; templateVersion: string; templateSha256: string;
+  applicationName: string; manifestSha256: string; report: SandboxReport;
+}
+export interface VerificationView { job: VerificationSummary; evidence: VerificationEvidence | null; evidenceSha256: string | null; }
+export interface VerificationSubmission { jobId: string; status: VerificationStatus; replayed: boolean; }
+
 // Review cases (M5B.2 decisions on published artifacts). The ETag is the optimistic-concurrency token.
 export type ReviewState = 'pendingReview' | 'approved' | 'rejected' | 'changesRequested';
 export type ReviewDecision = 'approve' | 'reject' | 'requestChanges';
@@ -103,6 +123,20 @@ export class FactoryApi {
 
   cancel(projectId: string, runId: string): Observable<RunView> {
     return this.http.post<RunView>(`${this.base}/projects/${encodeURIComponent(projectId)}/runs/${runId}/cancel`, null);
+  }
+
+  verifications(projectId: string): Observable<VerificationSummary[]> {
+    return this.http.get<VerificationSummary[]>(`${this.base}/projects/${encodeURIComponent(projectId)}/verifications`);
+  }
+
+  verification(projectId: string, jobId: string): Observable<VerificationView> {
+    return this.http.get<VerificationView>(`${this.base}/projects/${encodeURIComponent(projectId)}/verifications/${encodeURIComponent(jobId)}`);
+  }
+
+  submitVerification(projectId: string, applicationName: string, idempotencyKey: string): Observable<VerificationSubmission> {
+    return this.http.post<VerificationSubmission>(`${this.base}/projects/${encodeURIComponent(projectId)}/verifications`,
+      { templateId: starterTemplate.id, templateVersion: starterTemplate.version, applicationName },
+      { headers: new HttpHeaders({ 'Idempotency-Key': idempotencyKey }) });
   }
 
   review(projectId: string, caseId: string): Observable<ReviewCase> {

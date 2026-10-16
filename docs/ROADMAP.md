@@ -12,7 +12,7 @@ functionality in the baseline. This document now records that planning context w
 its priorities. The user also supplied the dependency rules, M13A–M16 priorities and preliminary
 estimates, and the M15 beta-hardening scope below from that planning discussion.
 
-**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9.1 (starter template, registry, deterministic generation) and M9.2 (offline sandbox runner) are implemented; M9.3 is planned; M9–M16 otherwise remain planned.**
+**M6–M8 are implemented and committed (see each milestone's status). M12a and M12b, the first Product Workspace slices, are implemented. M9 (starter template, offline sandbox runner, verification jobs with immutable evidence) is implemented, with Git workspaces deferred to M10; M9–M16 otherwise remain planned.**
 Estimated durations are preliminary planning ranges, not commitments or validated delivery
 forecasts. M6 architectural approval was subsequently supplied explicitly; its implementation and verification are recorded in [Product Lifecycle](PRODUCT_LIFECYCLE.md). No later milestone is authorized.
 
@@ -250,8 +250,8 @@ workflow states; the popup depends on M12.
 
 ## M9 — Application Templates & Secure Execution
 
-Status: **M9.1 and M9.2 implemented** (see [Templates and Execution](TEMPLATES_AND_EXECUTION.md)); M9.3
-workspaces/evidence/integration planned. Priority: **P0**. Estimated effort: **3–4 weeks**.
+Status: **implemented** as M9.1–M9.3 (see [Templates and Execution](TEMPLATES_AND_EXECUTION.md)); per-job
+Git workspaces are deferred to M10. Priority: **P0**. Estimated effort: **3–4 weeks**.
 
 Goal: Establish a reproducible Angular + ASP.NET Core + PostgreSQL application template and
 isolated build environment.

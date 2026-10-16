@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ConfirmedRequirement, FactoryApi, decompositionVersion, standardVersion } from './factory-api';
+import { VerificationsPanel } from './verification.page';
 import { WorkspaceState } from './workspace.state';
 
 // "ID: description" per line; blank lines ignored.
@@ -19,7 +20,7 @@ export function parseRequirements(text: string): ConfirmedRequirement[] | null {
 
 @Component({
   selector: 'app-project-page',
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink, DatePipe, VerificationsPanel],
   template: `
     <p><a routerLink="/">Projects</a> / {{ id() }}</p>
     <h1>{{ id() }}</h1>
@@ -40,6 +41,7 @@ export function parseRequirements(text: string): ConfirmedRequirement[] | null {
         @if (message()) { <span class="message" role="status">{{ message() }}</span> }
       </form>
     </section>
+    <app-verifications-panel [projectId]="id()" />
     <h2>Runs</h2>
     @if (state.runs().length === 0) { <p>No runs yet.</p> }
     <table class="runs">

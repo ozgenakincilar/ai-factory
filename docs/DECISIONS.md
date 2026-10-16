@@ -373,6 +373,23 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M9.3 verification jobs (2026-10-16, delegated)
+
+Taken under the user's delegated authority after "evet"; open to review.
+
+- **Own queue instead of a workflow version.** Verification jobs get their own table, leases and
+  functions in the orchestration schema rather than a third workflow version, which would have meant
+  rewriting the claim/complete/check functions shared by the model workflows. Trade-off: a second, small
+  lease mechanism to maintain.
+- **Evidence as exact bytes plus hash**, written once in the same transaction that finishes the job and
+  validated against the job; readers can re-hash the bytes they receive.
+- **Bounded sandbox lifetime** (`--rm`, `sleep` for job timeout + 60 s) instead of a startup sweep: a sweep
+  could remove another live worker's sandboxes on a shared Docker host.
+- **Polling for job status** in the UI instead of extending the run notification channel, whose payload
+  is typed to workflow runs.
+- **Git workspaces deferred to M10**: the in-sandbox workspace is a tmpfs per job; versioned
+  repositories belong with the Developer Agent's repository tools.
+
 ## M9 slicing and template design (2026-10-16, delegated)
 
 Taken under the user's delegated authority after the confirmations above; open to review.

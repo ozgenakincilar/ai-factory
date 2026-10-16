@@ -1,9 +1,10 @@
 # M9 — Application Templates & Secure Execution
 
-Status: **M9.1 and M9.2 implemented** on 2026-10-16 (starter template, registry, deterministic
-generation; offline sandbox runner with isolation tests) after the user approved Docker Desktop +
-WSL 2, the template stack and the DDD layer layout, and then M9.2 ("evet devam et, onaylıyorum").
-M9.3 (per-job workspaces, evidence, worker/UI integration) is planned. This document describes inspected code and executed local verification, not production
+Status: **M9.1, M9.2 and M9.3 implemented** on 2026-10-16 (starter template, registry, deterministic
+generation; offline sandbox runner with isolation tests; durable verification jobs with immutable
+evidence in the worker, API and Product Workspace) after the user approved Docker Desktop + WSL 2,
+the template stack and the DDD layer layout, M9.2 and M9.3 ("evet"). Per-job **Git** workspaces are
+deferred to M10, where the Developer Agent needs repository tools. This document describes inspected code and executed local verification, not production
 readiness.
 
 ## Slices
@@ -12,7 +13,7 @@ readiness.
 | --- | --- | --- |
 | M9.1 | Versioned starter template, minimal registry, deterministic generator, container verification of generated output | Implemented |
 | M9.2 | Runner image with an offline package cache; sandbox runner with network off, read-only root, non-root user, CPU/memory/PID/time/disk limits, no credentials; malicious-code tests | Implemented |
-| M9.3 | Per-job isolated workspaces, immutable hashed verification evidence, durable job integration in the worker, evidence in the Product Workspace, cross-tenant isolation tests | Planned |
+| M9.3 | Durable verification jobs (per-job sandbox workspace), immutable hashed evidence, worker/API/Product Workspace integration, cross-project isolation tests | Implemented (Git workspaces deferred to M10) |
 
 ## M9.1 — starter template
 
@@ -109,6 +110,63 @@ Docker Desktop 29.8.2 on WSL 2; images pinned by digest:
    `factory-runner:1.0.0-2e41c7460734` = `sha256:b8b763cc01628e2f23e5ef1e44f7f37ef3669be9199f7581334d179d0a549e00`
    (local id; a rebuild yields a new id).
 
+## M9.3 — verification jobs and evidence
+
+- **Jobs** (`orchestration."VerificationJobs"`, migration `20261016150000_Verification`): a Generator
+  of a project submits template id, version and `ApplicationName` with an `Idempotency-Key` (replay
+  returns the same job; a changed body is a conflict); at most 5 active jobs per project. Jobs have their
+  own queue and leases (90 s, renewed every 30 s); they are not workflow runs, so no workflow function
+  changed. A lost lease is retried once, then the job fails with `attempts_exhausted`. A trigger allows
+  only Queued→Running→(Queued | Passed | Failed | TimedOut | SandboxError); identity, template and name
+  never change and finished jobs are immutable.
+- **Evidence** (`orchestration."VerificationEvidence"`): the worker stores one JSON envelope (format 1:
+  job, project, template id/version/SHA-256, application name, generated-workspace SHA-256 and the full
+  `SandboxReport`) as exact bytes with their SHA-256, checked by a constraint. `complete_verification`
+  accepts it only from the lease owner and only when the envelope describes that job and its outcome is
+  consistent; the job's status follows the report in the same transaction. Evidence rows can never be
+  updated or deleted, even by the owner login.
+- **Worker** (`VerificationProcessor`, `VerificationWorkerService`, opt-in with `Verification:Enabled`,
+  `Templates:Root`, `Verification:RunnerImage`; `scripts/Run-FactoryWorker.ps1 -Verification`): claims a
+  job, loads and hash-checks the template, generates the application, runs `StarterVerification` in the
+  `DockerSandbox` while renewing the lease, and stores the evidence. A lost lease cancels the sandbox. A
+  template that cannot be loaded fails the job without evidence (`template_unavailable`).
+- **Sandbox lifetime**: containers are created with `--rm` and `sleep <job timeout + 60 s>`, so a sandbox
+  orphaned by a crashed worker (whose cleanup never ran) ends and removes itself.
+- **API**: `POST /api/projects/{id}/verifications`, `GET …/verifications`, `GET …/verifications/{jobId}`
+  (job, parsed evidence and its SHA-256) and `GET …/verifications/{jobId}/evidence` (the exact bytes,
+  `ETag: "sha256-…"`). Same audiences as runs; the API re-checks the stored hash before answering.
+- **Product Workspace**: the project page has a verification panel (name check, submit, list); the
+  verification page shows each step's outcome, exit code, duration and bounded output, the evidence,
+  template and workspace hashes, runner image and limits. Job status is polled every 3 s while active
+  (no push notification for jobs).
+
+## Executed verification M9.3 — 2026-10-16
+
+1. Migration: applied by the initializer to `factory_m86_verify_20261016` and
+   `factory_m7_verify_20261015`, and to a new database `factory_m93_verify_20261016` (all 18 migrations
+   and the runtime grants with their safety checks).
+2. PostgreSQL tests (6): idempotent, bounded and project-scoped submission; completion only by the lease
+   owner and only with an envelope for that job; hash-checked, immutable evidence (UPDATE/DELETE refused
+   for the owner login); failed reports; lost lease retried once then `attempts_exhausted`; runtime and
+   worker roles reach only their own functions and no tables; processor with the real template catalog;
+   HTTP submission, replay, strict bodies, listing, foreign project 403, evidence bytes and ETag.
+3. Docker tests: one more sandbox case shows an orphaned sandbox (never removed by its creator) ends
+   and disappears by itself after job timeout plus grace.
+4. Web unit tests: **19 passed** (name rule, durations, panel submission, verification page).
+5. Real-browser end-to-end (`scripts/Test-FactoryVerification.mjs`) with Keycloak, the API, the web
+   dev server and a worker with `-Verification`: `BrowserShop` submitted from the project page, all six
+   offline steps passed in the sandbox, the evidence page showed them and the evidence hash; the stored
+   SHA-256 matched the bytes in PostgreSQL; job finished on its first attempt in 31 s; no worker errors,
+   no token-like strings in logs, no sandbox left. No model calls.
+6. Live crash check: while `CrashShop` ran in the sandbox the worker process was killed; a new worker
+   reclaimed the job after the lease expired and it passed on attempt 2 (111 s in total, browser
+   end-to-end passed). The crashed worker's sandbox (started 10:34:49 UTC, `sleep 1260`) kept running as
+   expected and was gone at 10:55:52 UTC, removed by Docker when its bounded lifetime ended.
+   The first full-suite attempt failed one case because the migration-count assertion still expected 17
+   migrations; it was updated to 18 (as at every earlier migration).
+7. Full suite with `-IncludeKeycloak -IncludeDocker`: build **0 warnings, 0 errors**; **937 passed,
+   0 failed, 0 skipped**. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_13_59_11.trx`, SHA-256 `80ffe515fe63ea13448c2c8a43aa6016d8f6477e361aa43f77cf6c3b866c559c`.
+
 ## Limits
 
 - The M9.1 container test builds only Factory-authored output with network restore; untrusted code
@@ -121,7 +179,11 @@ Docker Desktop 29.8.2 on WSL 2; images pinned by digest:
   profile, user-namespace remapping or gVisor-style runtime. Not reviewed by a third party; local
   Docker Desktop is not a production runner (production runners come with M13A).
 - Background processes started by one step live until the job ends; a job is one trust unit.
-- Not yet wired into the worker, API or UI, and reports are not yet stored as immutable evidence (M9.3).
+- The workspace is a per-job tmpfs, not a Git repository; Git workspaces, diffs and commits come with
+  M10. Only the starter template has a verification plan.
+- A crashed worker's sandbox runs until its bounded lifetime ends (up to 21 minutes by default).
+- Job status reaches the browser by polling; verification jobs send no SignalR hints.
+- Evidence proves what the sandbox observed, not that the generated tests are meaningful (M11).
 - No PostgreSQL integration test in the template yet (the health endpoint needs no database).
 - One template and one stack; the registry is a file in the repository, not a database or service.
 - Names with consecutive capitals (for example `APIGateway`) or non-ASCII letters are refused.

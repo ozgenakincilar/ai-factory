@@ -41,6 +41,12 @@ describes inspected code and executed local verification, not production readine
   retry replays). Reject and request changes need a reason; 409/412 reload the case.
 - No backend change.
 
+## M9.3 — verification panel and page
+
+The project page has a starter-verification panel and `/projects/{id}/verifications/{jobId}` shows a
+job's sandbox steps and evidence; see [Templates and Execution](TEMPLATES_AND_EXECUTION.md#m93--verification-jobs-and-evidence).
+Run the worker with `-Verification` to process jobs.
+
 ## Running locally
 
 1. `scripts/Start-ReviewPostgres.ps1`, `scripts/Start-FactoryKeycloak.ps1` (fresh realms include

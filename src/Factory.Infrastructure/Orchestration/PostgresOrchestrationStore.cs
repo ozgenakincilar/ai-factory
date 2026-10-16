@@ -17,7 +17,7 @@ namespace Factory.Infrastructure.Orchestration;
 
 // One instance per database role: the API uses the lifecycle runtime (submit/read only);
 // the worker uses the orchestration worker role (claim/renew/complete/fail/publish only).
-public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore, IModelRegistryStore,
+public sealed partial class PostgresOrchestrationStore(string connection) : IWorkflowRunStore, IStepQueue, ITenantUsageStore, IModelRegistryStore,
     IWorkspaceDirectory
 {
     public Task<RegisteredModel> RegisterAsync(TrustedIdentity actor, string organizationId, Guid id, ModelRegistration registration, byte[] encryptedApiKey,
