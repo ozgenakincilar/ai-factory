@@ -3,8 +3,9 @@
 Status: plan approved 2026-10-15 (see [Architectural Decisions](DECISIONS.md#milestone-8-plan-2026-10-15-user-approved)).
 **M8.1 usage metering committed and pushed as `7da963f`; M8.2 tenancy as `4c7789d`; M8.3 budgets,
 retired synchronous generation and durable regeneration as `2564a85`; M8.4a customer-provided
-OpenAI-compatible models as `c7eb11d`. M8.4b Anthropic provider implemented as a local candidate**
-([M8.4b](#m84b--anthropic-provider)). M8.5 decomposition/routing/parallel steps are not started.
+OpenAI-compatible models as `c7eb11d`; M8.4b Anthropic provider as `8d0f3d6`. M8.5a model routing
+policy implemented as a local candidate** ([M8.5a](#m85a--model-routing-policy)). M8.5b request
+decomposition with plan approval and M8.5c parallel parts are designed below, not implemented.
 This document describes inspected code and executed local verification, not production readiness.
 
 ## M8.1 — Usage metering
@@ -384,3 +385,80 @@ full durable run on a customer's Anthropic key with organization pricing and att
 - Thinking/effort are left at model defaults (Haiku 5.5: adaptive, effort medium); thinking tokens
   count toward the reserved output bound and are billed as output.
 - Prompt caching, streaming and Anthropic fallbacks are not used.
+
+## M8.5a — Model routing policy
+
+Additive migration `20261016090000_ModelRouting` (embedded `ModelRouting.sql`). Decisions and the
+answers to the routing questions: [M8.5a decision](DECISIONS.md#model-routing-policy--m85a-2026-10-16-delegated).
+
+- **Domain policy.** `ModelRoutingPolicy` (`routing-v1`) is a deterministic domain service:
+  tier = max(role minimum, complexity tier, importance tier) with `Economy < Standard < Strong`.
+  Role minimums: Analysis Standard, Architecture Strong. Complexity Low/Medium/High maps to
+  Economy/Standard/Strong; importance High forces Strong. Reason codes: `role_minimum`,
+  `complexity`, `high_importance`, `customer_model`. Today's workflow has no part classification,
+  so Analysis routes to Standard and Architecture to Strong; classification arrives with M8.5b.
+- **Catalog.** Operators map tiers with `Generation:Tiers:{Economy|Standard|Strong}` =
+  `<provider>:<model>` (`openai` or `anthropic`); tiers without a mapping use the
+  `Generation:Provider` default. Only keys of providers in use are required.
+- **Customer models.** A project's assigned customer model serves every step; the route records
+  the policy tier with reason `customer_model`.
+- **Evidence.** Before the first provider call of each model attempt the worker records one route
+  (`orchestration.record_route`, lease-checked, worker-only): tier, reason, policy version and the
+  provider/model actually used. `orchestration."StepRoutes"` is append-only (one row per attempt);
+  runtime roles cannot read it directly. Run views include `routes`.
+- **Unchanged.** Budgets still reserve per call with the routed model's identity, so a tier mapped
+  to an unpriced model under a budget parks the step for a decision (M8.3); no automatic escalation.
+
+### Executed verification — 2026-10-16
+
+SDK 10.0.103, local candidate on top of `8d0f3d6`; no live LLM calls.
+
+1. Migration replayed inside `BEGIN … ROLLBACK` on `factory_m86_verify_20261016`, then applied by
+   the initializer to it and to `factory_m7_verify_20261015` (upgrade).
+2. Targeted orchestration, registry and migration run: 82 passed. An expected-SQLSTATE mistake in a
+   new test (`23514` instead of the immutable-record `55000`) was corrected before this run.
+3. Real headless Edge PKCE/state login, then the full suite with `-IncludeKeycloak`: build
+   **0 warnings, 0 errors**; **853 passed, 0 failed, 0 skipped** (841 + 12 new), including four live
+   Keycloak cases. TRX (ignored): `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-16_03_43_40.trx`,
+   SHA-256 `41147f8f80ef0a4f6c602785d0b527fde5998aa71f96bccd04d23695fb65d4bf`.
+
+New cases cover the policy table, rejection of unrouted kinds and unknown classifications,
+single-model catalogs, per-tier provider selection with the route recorded before any reservation
+or call, release without a model call when the lease is lost while recording, routes in the run
+view, lease/token/validation checks, write-once and immutable evidence, and role separation.
+
+### M8.5a limits
+
+- No classification exists yet for whole requests; Economy is reachable only with M8.5b parts.
+- No tenant- or project-level policy overrides; no routing among several customer models.
+- Tier mappings are per worker process; workers with different mappings route differently (each
+  route records what was used).
+
+## M8.5b/M8.5c — Request decomposition and parallel parts (design, not implemented)
+
+Proposed under delegated authority on 2026-10-16; not implemented. It changes the review artifact
+format and the workflow aggregate, so it is recorded for review before implementation.
+
+- **Workflow `decomposition-v1`.** Analysis (whole request) → Planning → plan approval → part
+  steps (parallel where independent) → Publication. The existing `analysis-architecture-v1`
+  workflow stays unchanged and remains the default.
+- **Planning (M8.5b).** A Planner agent (role minimum Strong) returns a strict-schema
+  `DecompositionPlan`: 1–12 parts, each with key, title, scope, the functional requirement ids it
+  covers, complexity, importance and dependencies. Validation: unique keys, acyclic dependencies,
+  every functional requirement covered, no unknown ids. Invalid plans fail the step explicitly.
+- **Plan approval.** The run waits on decision `plan_approval` (`approve` / `stop`) — the existing
+  blocking popup with no timeout. The popup shows the parts, their classification and the tier and
+  model each part would use (`ModelRoutingPolicy` with the part's complexity and importance).
+  Nothing executes before approval; `stop` cancels the run.
+- **Parts (M8.5c).** Approval materializes one `PartDesign` step per part, with dependency edges.
+  A step is claimable when all its dependencies succeeded; at most 4 attempts of one run run at
+  once. Each part runs the Architect on the part's scope plus the outputs of its dependencies and
+  writes only its own checkpoint, so no aggregate is modified concurrently (DDD rule). Publication
+  runs once after every part succeeded.
+- **Database.** Version-aware step kinds and ordinals, a `StepDependencies` table, a per-step
+  (not per-run) running-attempt constraint, and a generalized deferred run check; the claim
+  function respects dependencies and the per-run concurrency cap.
+- **Review artifact v2.** One case per run whose artifact holds the analysis, the approved plan
+  and the part proposals with their routes; v1 artifacts stay readable and immutable.
+- **Open for review.** Whether parts should also run the Analyst; the part limit and concurrency
+  cap; whether the plan may be edited by the customer instead of only approved or stopped.

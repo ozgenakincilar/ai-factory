@@ -31,6 +31,7 @@
     <EmbeddedResource Include="Reviews\Migrations\DurableRegeneration.sql" />
     <EmbeddedResource Include="Reviews\Migrations\ModelRegistry.sql" />
     <EmbeddedResource Include="Reviews\Migrations\AnthropicModels.sql" />
+    <EmbeddedResource Include="Reviews\Migrations\ModelRouting.sql" />
     <InternalsVisibleTo Include="Factory.Tests" />
   </ItemGroup>
 

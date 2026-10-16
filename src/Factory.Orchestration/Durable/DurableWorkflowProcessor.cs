@@ -55,7 +55,12 @@ public sealed class DurableWorkflowProcessor
         Factory.Core.Tenancy.ResolvedModel? resolved = null;
         try
         {
-            if (step.Kind != StepKind.Publication) resolved = await resolver.ResolveAsync(step, token, CancellationToken.None);
+            if (step.Kind != StepKind.Publication)
+            {
+                resolved = await resolver.ResolveAsync(step, token, CancellationToken.None);
+                // Routing evidence is recorded before the first provider call of the attempt.
+                if (resolved.Route is { } route) await queue.RecordRouteAsync(step.AttemptId, token, route, resolved.Identity, CancellationToken.None);
+            }
             // Every provider call of this attempt is reserved (when a model identity is known)
             // and metered, whatever its outcome.
             var identity = resolved?.Identity;

@@ -104,6 +104,11 @@ public sealed class PostgresOrchestrationStore(string connection) : IWorkflowRun
             P("input", call.InputTokens, NpgsqlDbType.Integer), P("output", call.OutputTokens, NpgsqlDbType.Integer),
             P("duration", call.DurationMs), P("outcome", call.Outcome.ToString()), P("reservation", call.ReservationId, NpgsqlDbType.Uuid));
 
+    public Task RecordRouteAsync(Guid attemptId, byte[] leaseToken, ModelRoute route, ModelIdentity? model, CancellationToken ct = default)
+        => Call("SELECT orchestration.record_route(@attempt,@token,@tier,@reason,@policy,@provider,@model)::text", ct,
+            P("attempt", attemptId), P("token", leaseToken), P("tier", route.Tier.ToString()), P("reason", route.Reason), P("policy", route.PolicyVersion),
+            P("provider", model?.Provider, NpgsqlDbType.Text), P("model", model?.Model, NpgsqlDbType.Text));
+
     public async Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens,
         CancellationToken ct = default)
     {

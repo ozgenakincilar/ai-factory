@@ -204,6 +204,61 @@ public class DurableWorkflowProcessorTests
     }
 
     [Fact]
+    public async Task EachStepUsesItsRoutedTierAndRecordsTheRouteBeforeAnyCall()
+    {
+        var standard = new Provider(); var strong = new Provider(); var fallback = new Provider();
+        var catalog = new ModelCatalog(new CatalogEntry(fallback, new ModelIdentity("openai", "default-model")),
+            new Dictionary<ModelTier, CatalogEntry>
+            {
+                [ModelTier.Standard] = new(standard, new ModelIdentity("openai", "standard-model")),
+                [ModelTier.Strong] = new(strong, new ModelIdentity("anthropic", "strong-model"))
+            });
+        foreach (var (kind, used, tier, model) in new[] { (StepKind.Analysis, standard, ModelTier.Standard, "standard-model"),
+            (StepKind.Architecture, strong, ModelTier.Strong, "strong-model") })
+        {
+            var queue = new Queue { Next = Step(kind) };
+            Assert.Equal(StepOutcome.Completed, await new DurableWorkflowProcessor(queue, new RegistryModelResolver(queue, catalog, null)).ProcessNextAsync("w", default));
+            var route = Assert.Single(queue.Routes);
+            Assert.Equal(new ModelRoute(tier, ModelRoutingPolicy.RoleMinimum, ModelRoutingPolicy.Version), route.Route);
+            Assert.Equal((model, 0), (route.Model!.Model, route.ReservationsBefore));
+            Assert.Equal(model, Assert.Single(queue.Reservations).Model.Model);
+            Assert.Equal(1, used.Calls);
+        }
+        Assert.Equal(0, fallback.Calls);
+    }
+
+    [Fact]
+    public async Task ALostLeaseWhileRecordingTheRouteReleasesTheStepWithoutCallingTheModel()
+    {
+        var queue = new Queue { Next = Step(StepKind.Analysis), RouteError = OrchestrationError.LeaseLost }; var provider = new Provider();
+        Assert.Equal(StepOutcome.Released, await new DurableWorkflowProcessor(queue, provider, new ModelIdentity("openai", "m")).ProcessNextAsync("w", default));
+        Assert.Equal(0, provider.Calls); Assert.Empty(queue.Reservations); Assert.Null(queue.Failure);
+    }
+
+    [Theory]
+    [InlineData(StepKind.Analysis, TaskComplexity.Medium, TaskImportance.Normal, ModelTier.Standard, "role_minimum")]
+    [InlineData(StepKind.Analysis, TaskComplexity.Low, TaskImportance.Normal, ModelTier.Standard, "role_minimum")]
+    [InlineData(StepKind.Analysis, TaskComplexity.High, TaskImportance.Normal, ModelTier.Strong, "complexity")]
+    [InlineData(StepKind.Analysis, TaskComplexity.Low, TaskImportance.High, ModelTier.Strong, "high_importance")]
+    [InlineData(StepKind.Analysis, TaskComplexity.High, TaskImportance.High, ModelTier.Strong, "high_importance")]
+    [InlineData(StepKind.Architecture, TaskComplexity.Low, TaskImportance.Normal, ModelTier.Strong, "role_minimum")]
+    [InlineData(StepKind.Architecture, TaskComplexity.High, TaskImportance.High, ModelTier.Strong, "role_minimum")]
+    public void RoutingTakesTheHighestOfRoleComplexityAndImportance(StepKind kind, TaskComplexity complexity, TaskImportance importance,
+        ModelTier tier, string reason)
+        => Assert.Equal(new ModelRoute(tier, reason, "routing-v1"), ModelRoutingPolicy.Route(kind, complexity, importance));
+
+    [Fact]
+    public void PublicationIsNeverRoutedAndUnknownClassificationsAreRejected()
+    {
+        Assert.Equal(OrchestrationError.InvalidCommand, Assert.Throws<OrchestrationException>(() => ModelRoutingPolicy.Route(StepKind.Publication)).Error);
+        Assert.Equal(OrchestrationError.InvalidCommand,
+            Assert.Throws<OrchestrationException>(() => ModelRoutingPolicy.Route(StepKind.Analysis, (TaskComplexity)7)).Error);
+        // A single-model catalog serves every tier with its default.
+        var only = new CatalogEntry(new Provider(), null);
+        Assert.All(Enum.GetValues<ModelTier>(), tier => Assert.Same(only, new ModelCatalog(only).For(tier)));
+    }
+
+    [Fact]
     public void InputEstimateIsConservativeForNonAsciiText()
     {
         var request = new ModelRequest(new string('ş', 1000), new string('ğ', 3000), new ModelOutputSchema("s", new string('x', 1000)));
@@ -258,6 +313,12 @@ public class DurableWorkflowProcessorTests
         }
         public Task<Factory.Core.Tenancy.ModelEndpoint?> GetModelEndpointAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default)
             => Task.FromResult<Factory.Core.Tenancy.ModelEndpoint?>(null);
+        internal List<(ModelRoute Route, ModelIdentity? Model, int ReservationsBefore)> Routes { get; } = []; internal OrchestrationError? RouteError;
+        public Task RecordRouteAsync(Guid attemptId, byte[] leaseToken, ModelRoute route, ModelIdentity? model, CancellationToken ct = default)
+        {
+            if (RouteError is { } error) throw new OrchestrationException(error);
+            Routes.Add((route, model, Reservations.Count)); return Task.CompletedTask;
+        }
         internal OrchestrationError? ReserveError; internal List<(ModelIdentity Model, int Input, int Output, Guid Id)> Reservations { get; } = [];
         internal (string Reason, IReadOnlyList<string> Options)? Decision;
         public Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens, CancellationToken ct = default)

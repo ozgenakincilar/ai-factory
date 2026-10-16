@@ -21,7 +21,7 @@ GRANT SELECT, INSERT ON orchestration."WorkflowRuns", orchestration."WorkflowSte
     orchestration."StepDecisions" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","FailureCode","WorkItemId","UpdatedAt","CancelledBy","CancelledAt") ON orchestration."WorkflowRuns" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","Choice","DecidedBy","DecidedAt") ON orchestration."StepDecisions" TO factory_lifecycle_guard;
-GRANT SELECT, INSERT ON orchestration."ModelCalls" TO factory_lifecycle_guard;
+GRANT SELECT, INSERT ON orchestration."ModelCalls", orchestration."StepRoutes" TO factory_lifecycle_guard;
 GRANT SELECT ON orchestration."ModelPrices", orchestration."Budgets" TO factory_lifecycle_guard;
 -- Customer-declared prices are written only by tenancy.register_model.
 GRANT INSERT ON orchestration."ModelPrices" TO factory_lifecycle_guard;
@@ -47,7 +47,8 @@ GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(u
     orchestration.publish(uuid,bytea,bytea), orchestration.request_decision(uuid,bytea,text,text[]),
     orchestration.record_model_call(uuid,bytea,text,text,integer,integer,integer,text,uuid),
     orchestration.reserve_cost(uuid,bytea,text,text,integer,integer),
-    orchestration.model_for_attempt(uuid,bytea) TO factory_orchestration_worker;
+    orchestration.model_for_attempt(uuid,bytea),
+    orchestration.record_route(uuid,bytea,text,text,text,text,text) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

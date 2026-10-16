@@ -69,7 +69,8 @@ public sealed record ModelUsageTotal(string? Provider, string? Model, UsageTotal
 public sealed record ProjectUsage(string ProjectId, DateTimeOffset From, DateTimeOffset To, UsageTotals Totals, IReadOnlyList<ModelUsageTotal> Models);
 
 public sealed record RunView(Guid RunId, string ProjectId, RunStatus Status, string? FailureCode,
-    IReadOnlyList<WorkflowStep> Steps, RunPublication? Publication, IReadOnlyList<StepDecision>? Decisions = null, UsageTotals? Usage = null);
+    IReadOnlyList<WorkflowStep> Steps, RunPublication? Publication, IReadOnlyList<StepDecision>? Decisions = null, UsageTotals? Usage = null,
+    IReadOnlyList<StepRoute>? Routes = null);
 
 // One leased step. Prior checkpoints are revalidated by the store before they are returned.
 // Decisions are this step's earlier human decisions, so a resumed step can act on them.
@@ -111,6 +112,9 @@ public interface IStepQueue
     // The customer model endpoint snapshotted on this attempt's run, or null for the Factory default.
     // Lease-authorized; the credential stays encrypted.
     Task<Factory.Core.Tenancy.ModelEndpoint?> GetModelEndpointAsync(Guid attemptId, byte[] leaseToken, CancellationToken ct = default);
+    // Records the routing evidence for this attempt once, before its first provider call.
+    // Lease-authorized; a second route for the same attempt is a Conflict.
+    Task RecordRouteAsync(Guid attemptId, byte[] leaseToken, ModelRoute route, ModelIdentity? model, CancellationToken ct = default);
     // Reserves the worst-case cost of one call against every applicable budget before it is made.
     // Throws BudgetExceeded or PriceUnknown (a budget applies but the model has no price).
     Task<Guid> ReserveCostAsync(Guid attemptId, byte[] leaseToken, ModelIdentity model, int estimatedInputTokens, int maxOutputTokens,

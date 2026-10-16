@@ -85,8 +85,9 @@ capacity, and connected clients receive state changes without polling.
 Status: plan approved 2026-10-15 in five phases; **M8.1 usage metering committed as `7da963f`**;
 **M8.2 tenancy committed as `4c7789d`**; **M8.3 budgets and reservations committed as `2564a85`**;
 **M8.4a customer-provided OpenAI-compatible models committed as `c7eb11d`**; **M8.4b Anthropic
-provider implemented** (Factory provider selection, customer Anthropic credentials; live call pending
-account credit); see [Cost Controls](COST_CONTROLS.md). M8.5 not started.
+provider committed as `8d0f3d6`** (live call pending account credit); **M8.5a model routing policy
+implemented** (tiers, deterministic rules, per-attempt evidence); M8.5b decomposition and M8.5c
+parallel parts designed, not implemented; see [Cost Controls](COST_CONTROLS.md).
 Priority: **P0**. Original estimate: **2–3 weeks**; the approved scope substantially exceeds it.
 
 Goal: Establish organization/project isolation and observable, limited AI spending.
@@ -110,7 +111,7 @@ tenant isolation and budget policies have automated tests.
 
 ### Cost-aware model routing — open design questions
 
-Status: **requirement recorded 2026-10-15; not designed or implemented**. Customers building
+Status: requirement recorded 2026-10-15; questions 1–7 and 9 answered by the [M8.5a decision](DECISIONS.md#model-routing-policy--m85a-2026-10-16-delegated) and implemented as routing-v1; decomposition is M8.5b. Customers building
 applications need cost management through task-appropriate model selection. Today one configured
 model (`OpenAI:Model`, default `gpt-4o-mini`) serves all agents and projects, and no token usage
 is recorded. The questions below must be answered in M8 design before implementation.

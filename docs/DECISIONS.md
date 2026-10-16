@@ -316,6 +316,29 @@ precondition, next case version, stale publication instead of overwrite).
   no fallback. The SDK client always receives an explicit key and never auto-resolves environment or
   profile credentials; SDK retries are disabled.
 
+## Model routing policy — M8.5a (2026-10-16, delegated)
+
+Taken under the user's delegated authority of 2026-10-16 ("soru sormadan projemizi ilerlet");
+each point answers an open routing question in the Roadmap and remains open to the user's review.
+
+- **Unit (Q1):** routing happens per workflow step attempt; with M8.5b the unit becomes the
+  decomposed part. Each attempt records one route before its first provider call.
+- **Criteria (Q2):** deterministic rules, no model call: tier = max(role minimum, complexity tier,
+  importance tier). Importance High forces Strong even for low complexity. Budget, latency and
+  availability do not change the tier; budgets refuse calls instead (M8.3), never downgrade them.
+- **Configuration (Q3):** platform operators map tiers to models per worker
+  (`Generation:Tiers:{Economy|Standard|Strong}`); a project's customer model overrides routing
+  entirely (customer choice). Tenant-level policy overrides are not implemented.
+- **Escalation (Q4):** no automatic retry with a stronger model; failures stay explicit (M6 rule).
+- **Customer models (Q5):** an assigned customer model serves every step (`customer_model` reason);
+  routing among several customer models is not implemented.
+- **Providers (Q6):** tiers may map to OpenAI or Anthropic models in the same worker.
+- **Quality floors (Q7):** Analysis never below Standard, Architecture never below Strong.
+- **Audit (Q9):** every attempt records tier, reason code, policy version (`routing-v1`) and the
+  provider/model actually used; the run view shows them.
+- Trade-off: with a single configured model every tier maps to it; the evidence still records the
+  intended tier, so the gap between intended and actual quality is visible rather than hidden.
+
 ## Domain-Driven Design (2026-10-15, user direction)
 
 Status: **mandatory rule set by the user, for the Factory and for every application it

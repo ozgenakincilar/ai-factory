@@ -59,4 +59,5 @@ public interface IModelProviderFactory
 }
 
 // Worker-side: which provider and reservation identity a claimed step uses.
-public sealed record ResolvedModel(IModelProvider Provider, ModelIdentity? Identity, bool CustomerHosted);
+public sealed record ResolvedModel(IModelProvider Provider, ModelIdentity? Identity, bool CustomerHosted,
+    ModelRoute? Route = null);
