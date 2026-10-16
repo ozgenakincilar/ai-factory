@@ -33,6 +33,8 @@ GRANT UPDATE ("Status","FailureCode","Attempts","WorkerId","TokenHash","LeaseExp
 -- M10.3 development jobs and evidence (evidence is insert-only).
 GRANT SELECT, INSERT ON orchestration."DevelopmentJobs", orchestration."DevelopmentEvidence" TO factory_lifecycle_guard;
 GRANT UPDATE ("Status","FailureCode","CostMicros","CapMicros","WorkerId","TokenHash","LeaseExpiresAt","UpdatedAt") ON orchestration."DevelopmentJobs" TO factory_lifecycle_guard;
+-- M11.3 pull request outcomes (insert-only).
+GRANT SELECT, INSERT ON orchestration."DevelopmentPullRequests" TO factory_lifecycle_guard;
 GRANT UPDATE ("Outcome","FailureCode","FinishedAt","LeaseExpiresAt") ON orchestration."StepAttempts" TO factory_lifecycle_guard;
 -- The guard owns the functions so managed publication passes the M6 case-mode guard.
 GRANT CREATE ON SCHEMA orchestration TO factory_lifecycle_guard;
@@ -64,7 +66,8 @@ GRANT EXECUTE ON FUNCTION orchestration.claim(text,bytea), orchestration.renew(u
     orchestration.claim_verification(text,bytea), orchestration.renew_verification(uuid,bytea),
     orchestration.complete_verification(uuid,bytea,bytea), orchestration.fail_verification(uuid,bytea,text),
     orchestration.claim_development(text,bytea,bigint,bigint), orchestration.renew_development(uuid,bytea),
-    orchestration.complete_development(uuid,bytea,bytea), orchestration.fail_development(uuid,bytea,text) TO factory_orchestration_worker;
+    orchestration.complete_development(uuid,bytea,bytea), orchestration.fail_development(uuid,bytea,text),
+    orchestration.next_pull_request(), orchestration.record_pull_request(uuid,text,text,text,integer,text,text,text) TO factory_orchestration_worker;
 DO $$ DECLARE s text; t record; BEGIN
     EXECUTE pg_catalog.format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM factory_orchestration_worker',pg_catalog.current_database());
     FOREACH s IN ARRAY ARRAY['public','review','access','lifecycle','orchestration'] LOOP

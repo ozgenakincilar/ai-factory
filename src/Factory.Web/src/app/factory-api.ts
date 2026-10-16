@@ -70,7 +70,9 @@ export interface DevelopmentEvidence {
   diff: string | null; diffSha256: string | null; verification: SandboxReport | null; log: string[];
   checks?: VerificationCheck[] | null; corrections?: number;
 }
-export interface DevelopmentView { job: DevelopmentSummary; evidence: DevelopmentEvidence | null; evidenceSha256: string | null; }
+export interface PullRequestOutcome { repository: string; branch: string; status: 'Opened' | 'Failed'; number: number | null; url: string | null;
+  headCommit: string | null; failureCode: string | null; createdAt: string; }
+export interface DevelopmentView { job: DevelopmentSummary; evidence: DevelopmentEvidence | null; evidenceSha256: string | null; pullRequest?: PullRequestOutcome | null; }
 export interface DevelopmentSubmission { jobId: string; status: DevelopmentStatus; replayed: boolean; }
 
 // Review cases (M5B.2 decisions on published artifacts). The ETag is the optimistic-concurrency token.

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Database, [ValidateRange(1,8)][int]$Concurrency = 1, [ValidateSet('openai','anthropic')][string]$Provider = 'openai', [switch]$Verification, [switch]$Development, [string]$StrongModel = '')
+param([Parameter(Mandatory)][string]$Database, [ValidateRange(1,8)][int]$Concurrency = 1, [ValidateSet('openai','anthropic')][string]$Provider = 'openai', [switch]$Verification, [switch]$Development, [string]$StrongModel = '', [string]$GitHubRepository = '')
 $ErrorActionPreference='Stop'
 # Local development worker against a dedicated, initialized M7 database. Never the owner login.
 if($Database -cnotmatch '\Afactory_[A-Za-z0-9_]+\z' -or $Database -eq 'factory_review_5a'){throw 'Invalid isolated database name.'}
@@ -39,6 +39,13 @@ if($Development){
 if($StrongModel){
     if($StrongModel -cnotmatch '\A[a-z0-9.\-]{1,64}\z'){throw 'Invalid model name.'}
     $values['Generation__Tiers__Strong']="openai:$StrongModel"
+}
+# -GitHubRepository opens pull requests for verified development jobs (M11.3) with the repository-scoped
+# token in the worker User Secrets (GitHub:Token). The Factory never merges.
+if($GitHubRepository){
+    if(-not $Development){throw 'Pull requests need -Development.'}
+    if($GitHubRepository -cnotmatch '\A[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}\z'){throw 'Invalid repository.'}
+    $values['GitHub__Repository']=$GitHubRepository
 }
 $saved=@{}
 try {

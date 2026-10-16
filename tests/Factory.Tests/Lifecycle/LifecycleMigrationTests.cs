@@ -43,8 +43,8 @@ public class LifecycleMigrationTests
         var before = await Audit();
         await migrator.MigrateAsync();
         Assert.False(db.Database.HasPendingModelChanges());
-        // M6 plus the additive M7.1, M7.2, M7.3, M8.1, M8.2, M8.3, regeneration, M8.4a, M8.4b, M8.5a, M8.5b/c, M12a, M9.3 and M10.3 migrations.
-        Assert.Equal(19,(await db.Database.GetAppliedMigrationsAsync()).Count());
+        // M6 plus the additive M7.1, M7.2, M7.3, M8.1, M8.2, M8.3, regeneration, M8.4a, M8.4b, M8.5a, M8.5b/c, M12a, M9.3, M10.3 and M11.3 migrations.
+        Assert.Equal(20,(await db.Database.GetAppliedMigrationsAsync()).Count());
         // M8.2 backfill: the pre-existing project got its own legacy organization, and its active
         // Human Reviewer became an organization Admin (preserving decision authority).
         Assert.Equal("legacy-"+review.ProjectId,await db.Database.SqlQueryRaw<string>("""

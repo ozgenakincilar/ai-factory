@@ -36,7 +36,17 @@ try {
     & dotnet @sdkArgs build --no-restore -p:OutputPath=bin/Milestone6/net10.0/
     if($LASTEXITCODE){throw 'Build failed.'}
     $testArgs=@('test','--no-build','--no-restore','-p:OutputPath=bin/Milestone6/net10.0/','--logger','trx','--results-directory','artifacts/m6-tests')
-    if($Filter){$testArgs+=@('--filter',$Filter)}
-    & dotnet @sdkArgs @testArgs
-    if($LASTEXITCODE){throw 'Tests failed.'}
+    if($Filter){
+        & dotnet @sdkArgs @testArgs --filter $Filter
+        if($LASTEXITCODE){throw 'Tests failed.'}
+    } elseif($IncludeKeycloak){
+        # Browser access tokens live 300 s; the live Keycloak cases run first, while they are fresh.
+        & dotnet @sdkArgs @testArgs --filter 'FullyQualifiedName~Keycloak'
+        $keycloakExit=$LASTEXITCODE
+        & dotnet @sdkArgs @testArgs --filter 'FullyQualifiedName!~Keycloak'
+        if($LASTEXITCODE -or $keycloakExit){throw 'Tests failed.'}
+    } else {
+        & dotnet @sdkArgs @testArgs
+        if($LASTEXITCODE){throw 'Tests failed.'}
+    }
 } finally {foreach($key in $values.Keys){[Environment]::SetEnvironmentVariable($key,$saved[$key])};Pop-Location}

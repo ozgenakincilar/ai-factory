@@ -356,8 +356,8 @@ sandbox and evidence.
 
 ## M11 — Verification Agent & GitHub Pull Request
 
-Status: **M11.1 and M11.2 implemented** (see [Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md));
-M11.3 GitHub pull requests awaits the user's repository-scoped token. Priority: **P0**. Estimated effort: **2–3 weeks**.
+Status: **implemented** as M11.1–M11.3 (see [Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md));
+the live pull request run awaits a token that includes the target repository. Priority: **P0**. Estimated effort: **2–3 weeks**.
 
 Goal: Produce evidence-backed Pull Requests rather than relying on AI completion claims.
 

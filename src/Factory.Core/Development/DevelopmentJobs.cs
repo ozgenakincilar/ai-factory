@@ -28,7 +28,7 @@ public sealed record DevelopmentSubmission(Guid JobId, DevelopmentJobStatus Stat
 public sealed record DevelopmentSummary(Guid JobId, Guid CaseId, int ArtifactVersion, string ApplicationName, DevelopmentJobStatus Status,
     string? FailureCode, long? CostMicros, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 
-public sealed record DevelopmentView(DevelopmentSummary Job, DevelopmentEvidence? Evidence, string? EvidenceSha256);
+public sealed record DevelopmentView(DevelopmentSummary Job, DevelopmentEvidence? Evidence, string? EvidenceSha256, PullRequestOutcome? PullRequest = null);
 
 // The approved artifact travels to the worker as its exact bytes with their hash.
 public sealed record ClaimedDevelopment(Guid JobId, string ProjectId, Guid CaseId, int ArtifactVersion, string ArtifactSha256,

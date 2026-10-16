@@ -36,6 +36,7 @@
     <EmbeddedResource Include="Reviews\Migrations\Workspace.sql" />
     <EmbeddedResource Include="Reviews\Migrations\Verification.sql" />
     <EmbeddedResource Include="Reviews\Migrations\Development.sql" />
+    <EmbeddedResource Include="Reviews\Migrations\PullRequests.sql" />
     <InternalsVisibleTo Include="Factory.Tests" />
   </ItemGroup>
 

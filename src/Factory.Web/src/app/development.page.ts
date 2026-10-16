@@ -133,6 +133,12 @@ export class DevelopmentsPanel implements OnInit {
       <h1>{{ v.job.applicationName }} <span class="status" [attr.data-status]="v.job.status">{{ v.job.status }}</span></h1>
       <p class="meta">Review case <a [routerLink]="['/projects', id(), 'reviews', v.job.caseId]">{{ v.job.caseId }}</a> version {{ v.job.artifactVersion }}
         · requested {{ v.job.createdAt | date: 'medium' }}{{ v.job.failureCode ? ' · ' + v.job.failureCode : '' }}</p>
+      @if (v.pullRequest; as pr) {
+        @if (pr.status === 'Opened' && safeUrl(pr.url, pr.repository)) {
+          <p class="pr">Pull request <a [href]="pr.url" target="_blank" rel="noopener noreferrer">{{ pr.repository }}#{{ pr.number }}</a>
+            on branch <code>{{ pr.branch }}</code>: review and merge on GitHub; the Factory never merges.</p>
+        } @else { <p class="pr error">Pull request not opened: {{ pr.failureCode }}</p> }
+      }
       @if (v.evidence; as e) {
         <p>{{ e.model }} · {{ e.turns }} turns · {{ e.actions }} actions · estimated USD {{ cost(e.costMicros) }}
           ({{ e.calls.length }} calls, {{ inputTokens() | number }} input / {{ outputTokens() | number }} output tokens)</p>
@@ -208,6 +214,11 @@ export class DevelopmentPage implements OnInit {
   protected readonly outputTokens = computed(() => this.view()?.evidence?.calls.reduce((s, c) => s + (c.outputTokens ?? 0), 0) ?? 0);
   protected readonly cost = usd;
   protected readonly duration = seconds;
+  // Only links to the configured repository's pull requests on github.com are rendered.
+  protected safeUrl(url: string | null, repository: string): boolean {
+    const prefix = `https://github.com/${repository}/pull/`;
+    return url !== null && url.startsWith(prefix) && /^\d+$/.test(url.slice(prefix.length));
+  }
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   ngOnInit(): void {

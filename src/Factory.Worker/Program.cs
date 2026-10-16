@@ -122,6 +122,21 @@ if (builder.Configuration.GetValue<bool>("Development:Enabled"))
         new Factory.Infrastructure.Execution.GitWorkspaceDiffer(sandbox), limits,
         builder.Configuration.GetValue("Development:TotalCapMicros", 2_000_000L)));
     builder.Services.AddHostedService<DevelopmentWorkerService>();
+
+    // M11.3 pull requests (opt-in): GitHub:Repository and a token limited to that repository. The
+    // Factory pushes only verified, evidence-matching commits and never merges.
+    var repository = builder.Configuration["GitHub:Repository"];
+    if (!string.IsNullOrWhiteSpace(repository))
+    {
+        var token = builder.Configuration["GitHub:Token"];
+        if (!Factory.Core.Development.PullRequestText.IsRepository(repository) || string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("Pull requests need GitHub:Repository (owner/name) and GitHub:Token.");
+        builder.Services.AddSingleton(new Factory.Orchestration.Development.PullRequestProcessor(new PostgresOrchestrationStore(connection),
+            new Factory.Infrastructure.Templates.FileSystemTemplateCatalog(templates),
+            new Factory.Infrastructure.GitHub.GitHubPullRequestPublisher(new Factory.Infrastructure.GitHub.GitHubOptions(repository, token),
+                new HttpClient { Timeout = TimeSpan.FromSeconds(60) })));
+        builder.Services.AddHostedService<PullRequestWorkerService>();
+    }
 }
 
 builder.Build().Run();

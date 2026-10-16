@@ -1,8 +1,8 @@
 # M11 — Verification Agent & GitHub Pull Request
 
-Status: **M11.1 and M11.2 implemented** on 2026-10-17 (Factory-established verification checks and a
-bounded correction loop). **M11.3** (GitHub branch and pull request) is ready to start once the user
-has created the repository-scoped token; decisions: [Decisions](DECISIONS.md#m11-github-target-credential-and-merge-policy-2026-10-17-user-decision).
+Status: **M11.1, M11.2 and M11.3 implemented** on 2026-10-17 (Factory-established verification checks, a
+bounded correction loop, and pull requests of verified, evidence-matching commits). The live GitHub run
+is pending: the supplied token does not yet include the target repository; decisions: [Decisions](DECISIONS.md#m11-github-target-credential-and-merge-policy-2026-10-17-user-decision).
 
 ## M11.1 — verified results versus agent claims
 
@@ -48,6 +48,60 @@ correction runs under the same job cost cap; nothing is retried outside these bo
    0 failed, 1 skipped** (the paid live test). TRX (ignored):
    `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-17_00_53_28.trx`, SHA-256 `ee4328bd3cc498e137b086fa92697a5e64064ae0fe3f4a089ee0bf11330e97a9`. No model calls.
 
+## M11.3 — pull requests
+
+- **Outcome table** (`orchestration."DevelopmentPullRequests"`, migration `20261017090000_PullRequests`): one
+  immutable row per verified job, `Opened` (number, URL, pushed head commit) or `Failed` (code). The
+  database accepts an opened row only for a Verified job, a `factory/...` branch, a URL under
+  `https://github.com/<repository>/pull/` and a head commit equal to the evidence's final commit.
+  `next_pull_request` gives the worker the oldest verified job without an outcome with its exact evidence
+  bytes; `read_development` now includes the outcome.
+- **Publisher** (`GitHubPullRequestPublisher`): regenerates the base files from the hash-verified
+  template, re-creates the base commit and applies the evidence diff with git on the host in a temporary
+  repository isolated from the user's Git configuration (no system or global config, no credential
+  helpers or hooks, `core.autocrlf=false`, fixed identity and dates). Both commit ids must equal the
+  evidence's before anything is pushed. It pushes the base commit to `main` only when `main` does not
+  exist, the change to `factory/<application>-<job>` without force, and opens the pull request through the
+  REST API (an existing one for the branch is returned). It never calls a merge API. The token is passed
+  to git as an HTTP header through environment configuration (not on the command line) and to the API as
+  a bearer token; it never enters the sandbox.
+- **Body** (`PullRequestText`): source (approved case, version and hash; template; model, turns, calls,
+  cost, corrections; commits; diff and evidence hashes), a requirement traceability table, the Factory
+  checks, the offline verification steps, and the statements that human review is required and the
+  Factory never merges. Model-derived text is escaped so it cannot break the tables or add markup.
+- **Worker** (`PullRequestProcessor`, `PullRequestWorkerService`; `scripts/Run-FactoryWorker.ps1
+  -Verification -Development -GitHubRepository ozgenakincilar/stockflow` with `GitHub:Token` in the worker
+  User Secrets): transient failures (network, API) are retried three times, permanent ones (commit
+  mismatch, diff not applying, branch conflict, missing template) are recorded at once.
+- **Product Workspace**: the development page links the pull request (only URLs of the configured
+  repository's pull requests are rendered, `rel="noopener noreferrer"`) or shows the failure code.
+- **Test script**: with `-IncludeKeycloak`, the live Keycloak cases now run first; browser access tokens
+  live 300 s and the suite takes about 6 minutes (one run failed with 401 for that reason).
+
+## Executed verification M11.3 — 2026-10-17
+
+1. Unit tests: branch, title and body from the evidence; model-derived text escaped; repository names;
+   the processor publishes from the regenerated base and records the outcome, defers transient failures
+   and records them after three attempts, records permanent failures at once.
+2. Docker test with real evidence commits from `GitSnapshot`, a local bare repository and a fake GitHub
+   API: the host re-creates exactly the evidence commits (container and host git agree), `main` receives
+   the base commit and the branch the change; the pull request is created once with base `main`, the
+   branch as head and `maintainer_can_modify=false`; publishing again returns it; no merge or PUT request
+   is ever made; a tampered diff is refused (`final_commit_mismatch`) and nothing is pushed.
+3. PostgreSQL test: outcomes recorded once, only for the evidenced head, this repository's pull URL and a
+   `factory/` branch; the outcome appears in the job view; rows are immutable for the owner login; the
+   runtime role cannot reach the worker functions.
+4. Full suite with `-IncludeKeycloak -IncludeDocker`: build **0 warnings, 0 errors**; Keycloak pass **4
+   passed**, remaining pass **1000 passed, 0 failed, 1 skipped** (the paid live test). TRX (ignored):
+   `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-17_01_41_18.trx` (SHA-256
+   `8000e410dc7cc8c79a99db45cd6b0301c6ad0c044da8a4cb5bf2a9f2af6010af`) and
+   `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-17_01_41_20.trx` (SHA-256
+   `d663ee59f64306ecfa9a2ac9cce2cb2c1a554c6245f21dc2a2763406983f778a`).
+5. **Live GitHub run: not yet possible.** The token the user supplied (pasted in chat on 2026-10-17 and
+   stored in the worker User Secrets at the user's request) is valid but does not include the `stockflow`
+   repository: GitHub answers 404 and reports `metadata=read` and `pull_requests=read` as missing. The
+   user was asked to add the repository and Contents/Pull requests write permissions to the token.
+
 ## Limits
 
 - The test report is written inside the sandbox, where the untrusted code also runs; a deliberately
@@ -55,5 +109,7 @@ correction runs under the same job cost cap; nothing is retried outside these bo
   limits the harm; human review remains required.
 - The layer scan is textual (namespaces and `using` lines), not a semantic analysis; the reflection-based
   architecture tests remain the primary guard.
+- Without branch protection (GitHub Free, private repository), "never merge" and "main only once" are
+  Factory behaviour, not server-side rules; the token itself could push to `main`.
 - No dependency vulnerability scan beyond the protected, already audited template manifests (the agent
   cannot change package references).

@@ -194,6 +194,44 @@ public class DevelopmentJobTests
     }
 
     [OrchestrationFact]
+    public async Task PullRequestOutcomes_AreRecordedOnce_ForTheEvidencedHeadOnly()
+    {
+        await Drain(); await Durable.Drain(); await using var f = await LifecycleFixture.Create();
+        var (approved, hash) = await Approved(f);
+        var submitted = await Durable.Api.SubmitDevelopmentAsync(f.Actor, f.Project, Guid.NewGuid(), Request(approved.CaseId, hash));
+        var token = RandomNumberGenerator.GetBytes(32);
+        var job = (await Durable.Worker.ClaimDevelopmentAsync("worker", token, Cap, Unlimited))!;
+        await Durable.Worker.CompleteDevelopmentAsync(job.JobId, token, Evidence(job));
+        // The queue is database-wide: settle other verified jobs first.
+        PendingPullRequest? next;
+        while ((next = await Durable.Worker.NextPullRequestAsync()) is not null && next.JobId != job.JobId)
+            await Durable.Worker.RecordPullRequestAsync(next.JobId, "ozgenakincilar/stockflow", "factory/test-drain", null, "test_drain");
+        Assert.NotNull(next);
+        Assert.Equal(DevelopmentEvidenceFormat.Serialize(Evidence(job)), next!.Evidence);
+        const string repo = "ozgenakincilar/stockflow";
+        var head = Evidence(job).FinalCommit!;
+        foreach (var (url, commit) in new[] { ("https://github.com/ozgenakincilar/stockflow/pull/1", new string('9', 40)),
+            ("https://github.com/someone/else/pull/1", head), ("https://evil.example/ozgenakincilar/stockflow/pull/1", head) })
+            Assert.Equal(OrchestrationError.InvalidCommand, Error(await Assert.ThrowsAnyAsync<Exception>(() =>
+                Durable.Worker.RecordPullRequestAsync(job.JobId, repo, "factory/sample-shop-1", new PullRequestResult(1, url, commit), null))));
+        // Only factory/ branches can be recorded (a check constraint, surfaced as an integrity error).
+        await Assert.ThrowsAnyAsync<OrchestrationException>(() =>
+            Durable.Worker.RecordPullRequestAsync(job.JobId, repo, "main", new PullRequestResult(1, "https://github.com/ozgenakincilar/stockflow/pull/1", head), null));
+        await Durable.Worker.RecordPullRequestAsync(job.JobId, repo, "factory/sample-shop-1", new PullRequestResult(1, "https://github.com/ozgenakincilar/stockflow/pull/1", head), null);
+        Assert.Equal(OrchestrationError.Conflict, Error(await Assert.ThrowsAnyAsync<Exception>(() =>
+            Durable.Worker.RecordPullRequestAsync(job.JobId, repo, "factory/sample-shop-1", null, "push_failed"))));
+        Assert.NotEqual(job.JobId, (await Durable.Worker.NextPullRequestAsync())?.JobId);
+        var view = await Durable.Api.GetDevelopmentAsync(f.Actor, f.Project, submitted.JobId);
+        Assert.Equal(("Opened", (int?)1, "https://github.com/ozgenakincilar/stockflow/pull/1", head),
+            (view.PullRequest!.Status, view.PullRequest.Number, view.PullRequest.Url, view.PullRequest.HeadCommit));
+        await Assert.ThrowsAsync<PostgresException>(() => Durable.Sql("UPDATE orchestration.\"DevelopmentPullRequests\" SET \"Number\"=2"));
+        await Assert.ThrowsAsync<PostgresException>(() => Durable.Sql("DELETE FROM orchestration.\"DevelopmentPullRequests\""));
+        await using var db = new NpgsqlConnection(LifecycleFixture.Runtime); await db.OpenAsync();
+        await using var command = new NpgsqlCommand("SELECT orchestration.next_pull_request()", db);
+        Assert.Equal("42501", (await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteScalarAsync())).SqlState);
+    }
+
+    [OrchestrationFact]
     public async Task RuntimeAndWorkerRoles_ReachOnlyTheirOwnFunctions()
     {
         var worker = Environment.GetEnvironmentVariable("FACTORY_ORCHESTRATION_WORKER_CONNECTION")!;

@@ -48,6 +48,8 @@ describe('DevelopmentPage', () => {
   it('shows changes with requirements, the diff, verification and evidence', async () => {
     const view: DevelopmentView = {
       evidenceSha256: 'e'.repeat(64),
+      pullRequest: { repository: 'ozgenakincilar/stockflow', branch: 'factory/stock-flow-0123456789ab', status: 'Opened', number: 4,
+        url: 'https://github.com/ozgenakincilar/stockflow/pull/4', headCommit: 'c'.repeat(40), failureCode: null, createdAt: '2026-10-17T10:00:00Z' },
       job: { jobId: 'j1', caseId: 'c1', artifactVersion: 1, applicationName: 'StockFlow', status: 'verified', failureCode: null, costMicros: 9154,
         createdAt: '2026-10-16T10:00:00Z', updatedAt: '2026-10-16T10:01:00Z' },
       evidence: {
@@ -79,5 +81,9 @@ describe('DevelopmentPage', () => {
     expect(element.textContent).toContain('e'.repeat(64));
     expect(element.querySelector('.checks')?.textContent).toContain('new_tests (advisory)');
     expect(element.textContent).toContain('1 correction(s) after failed checks');
+    const link = element.querySelector('.pr a') as HTMLAnchorElement;
+    expect(link.href).toBe('https://github.com/ozgenakincilar/stockflow/pull/4');
+    expect(link.rel).toContain('noopener');
+    expect(element.textContent).toContain('the Factory never merges');
   });
 });

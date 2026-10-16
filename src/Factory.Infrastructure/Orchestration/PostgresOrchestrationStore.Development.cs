@@ -8,7 +8,7 @@ using NpgsqlTypes;
 namespace Factory.Infrastructure.Orchestration;
 
 // M10.3 development jobs: same roles and error mapping as verification jobs.
-public sealed partial class PostgresOrchestrationStore : IDevelopmentJobs, IDevelopmentQueue
+public sealed partial class PostgresOrchestrationStore : IDevelopmentJobs, IDevelopmentQueue, IPullRequestQueue
 {
     public Task<DevelopmentSubmission> SubmitDevelopmentAsync(TrustedIdentity actor, string projectId, Guid key, DevelopmentRequest request,
         CancellationToken ct = default)
@@ -27,14 +27,14 @@ public sealed partial class PostgresOrchestrationStore : IDevelopmentJobs, IDeve
     public async Task<DevelopmentView> GetDevelopmentAsync(TrustedIdentity actor, string projectId, Guid jobId, CancellationToken ct = default)
     {
         var raw = await Read<RawDevelopment>("read_development", actor, Project(projectId), ct, P("job", jobId));
-        if (raw.EvidenceSha256 is null) return new(raw.Job, null, null);
+        if (raw.EvidenceSha256 is null) return new(raw.Job, null, null, raw.PullRequest);
         var bytes = await GetDevelopmentEvidenceAsync(actor, projectId, jobId, ct);
         if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != raw.EvidenceSha256) throw new OrchestrationException(OrchestrationError.Integrity);
         try
         {
             var evidence = JsonSerializer.Deserialize<DevelopmentEvidence>(bytes, DevelopmentEvidenceFormat.Options);
             if (evidence is null || evidence.JobId != jobId || evidence.ProjectId != projectId) throw new OrchestrationException(OrchestrationError.Integrity);
-            return new(raw.Job, evidence, raw.EvidenceSha256);
+            return new(raw.Job, evidence, raw.EvidenceSha256, raw.PullRequest);
         }
         catch (JsonException) { throw new OrchestrationException(OrchestrationError.Integrity); }
     }
@@ -82,5 +82,28 @@ public sealed partial class PostgresOrchestrationStore : IDevelopmentJobs, IDeve
     public Task FailDevelopmentAsync(Guid jobId, byte[] leaseToken, string failureCode, CancellationToken ct = default)
         => Call("SELECT orchestration.fail_development(@job,@token,@failure)::text", ct, P("job", jobId), P("token", leaseToken), P("failure", failureCode));
 
-    private sealed record RawDevelopment(DevelopmentSummary Job, string? EvidenceSha256);
+    private sealed record RawDevelopment(DevelopmentSummary Job, string? EvidenceSha256, PullRequestOutcome? PullRequest = null);
+
+    public async Task<PendingPullRequest?> NextPullRequestAsync(CancellationToken ct = default)
+    {
+        var json = await Call("SELECT orchestration.next_pull_request()::text", ct);
+        if (json is null) return null;
+        try
+        {
+            var raw = JsonSerializer.Deserialize<RawPending>(json, Json) ?? throw new OrchestrationException(OrchestrationError.Integrity);
+            var bytes = Convert.FromBase64String(raw.Evidence);
+            if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != raw.EvidenceSha256) throw new OrchestrationException(OrchestrationError.Integrity);
+            return new(raw.JobId, bytes, raw.EvidenceSha256);
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException) { throw new OrchestrationException(OrchestrationError.Integrity); }
+    }
+
+    public Task RecordPullRequestAsync(Guid jobId, string repository, string branch, PullRequestResult? opened, string? failureCode,
+        CancellationToken ct = default)
+        => Call("SELECT orchestration.record_pull_request(@job,@repository,@branch,@status,@number,@url,@head,@failure)::text", ct,
+            P("job", jobId), P("repository", repository), P("branch", branch), P("status", opened is null ? "Failed" : "Opened"),
+            P("number", opened?.Number, NpgsqlDbType.Integer), P("url", opened?.Url, NpgsqlDbType.Text), P("head", opened?.HeadCommit, NpgsqlDbType.Text),
+            P("failure", opened is null ? failureCode : null, NpgsqlDbType.Text));
+
+    private sealed record RawPending(Guid JobId, string Evidence, string EvidenceSha256);
 }
