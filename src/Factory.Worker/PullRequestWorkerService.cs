@@ -16,7 +16,8 @@ public sealed class PullRequestWorkerService(PullRequestProcessor processor, ILo
             try
             {
                 var step = await processor.ProcessNextAsync(stoppingToken);
-                if (step != PullRequestStep.Idle) logger.LogInformation("Pull request worker: {Step}", step);
+                if (step != PullRequestStep.Idle) logger.LogInformation("Pull request worker: {Step} {Code}", step,
+                    step is PullRequestStep.Deferred or PullRequestStep.Failed ? processor.LastFailureCode : null);
                 if (step == PullRequestStep.Idle) await Task.Delay(Idle, stoppingToken);
                 else if (step == PullRequestStep.Deferred) await Task.Delay(Backoff, stoppingToken);
             }

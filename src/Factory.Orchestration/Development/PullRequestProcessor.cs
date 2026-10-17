@@ -15,6 +15,9 @@ public sealed class PullRequestProcessor(IPullRequestQueue queue, ITemplateCatal
     private static readonly HashSet<string> Transient = ["remote_unavailable", "push_failed", "pull_request_api_failed", "git_unavailable"];
     private readonly Dictionary<Guid, int> _attempts = [];
 
+    // The last failure code (a fixed Factory code, safe to log).
+    public string? LastFailureCode { get; private set; }
+
     public async Task<PullRequestStep> ProcessNextAsync(CancellationToken ct)
     {
         var pending = await queue.NextPullRequestAsync(ct);
@@ -45,10 +48,12 @@ public sealed class PullRequestProcessor(IPullRequestQueue queue, ITemplateCatal
         }
         catch (PullRequestException ex) when (Transient.Contains(ex.Code) && Attempt(pending.JobId) < maxTransientAttempts)
         {
+            LastFailureCode = ex.Code;
             return PullRequestStep.Deferred;
         }
         catch (PullRequestException ex)
         {
+            LastFailureCode = ex.Code;
             await queue.RecordPullRequestAsync(pending.JobId, publisher.Repository, branch, null, ex.Code, ct);
             _attempts.Remove(pending.JobId);
             return PullRequestStep.Failed;
