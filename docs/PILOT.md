@@ -6,6 +6,9 @@ Developer Agent → Factory verification → durable deployment with the user's 
 Azure staging (France Central) → health, configuration and functional checks. The recovery exercise is still
 open (see the end).
 
+Status of the M14 acceptance: everything except the recovery exercise, which the user decided not to run
+(procedure below, unverified).
+
 Live application: https://stock-flow-staging-9b228545.azurewebsites.net (App Service F1, PostgreSQL B1MS).
 
 ## What runs
@@ -59,8 +62,8 @@ storage cents); budget alert USD 5/month.
 
 ## Limits and open items
 
-- **Recovery exercise not yet executed** (M14 acceptance): planned as a rollback to the previous verified
-  release and a roll-forward, each a user-approved deployment, with health and functional checks.
+- **Recovery exercise not executed** (M14 acceptance item; the user decided on 2026-10-17 not to run it).
+  The procedure below is documented, not verified.
 - No versioned EF migrations: a changed model on an existing table is not migrated (1.1.3 only creates
   missing tables; "Failed executing DbCommand" lines on later starts are expected and harmless).
 - Readiness checks the connection, not the application's tables.
@@ -70,3 +73,24 @@ storage cents); budget alert USD 5/month.
   1.0.0 base commit, so a 1.1.x branch would have an unrelated history.
 - Staging only; no custom domain, TLS certificate of our own, authentication or backups beyond the
   PostgreSQL defaults.
+
+## Recovery procedure (documented, not executed)
+
+The drill that was prepared: an operator corrupts the web app's `ConnectionStrings__Database` setting with
+the Azure CLI (as a portal mistake would); `/health/ready` and the product endpoints fail; a new deployment of
+the same verified job is requested; its plan shows the drift as one change to `azurerm_linux_web_app.api`;
+an Owner/Admin approves; the apply restores the setting; health, the Key Vault reference and the product
+data (created before the incident) are checked. The agent's permission policy refused both injecting the
+fault and deleting the drill's test product (`RECOVERY-1`, left in staging); the user chose not to run it.
+
+General procedure for this target:
+
+- **Configuration or infrastructure drift**: request a deployment of the current verified job; Terraform
+  plans the difference against the module; approve only if the plan reverts exactly the drift; verify.
+- **Bad release**: request a deployment of an earlier verified job (a rollback is a forward deployment of
+  older evidence); the release is rebuilt from that evidence and must reproduce its hash.
+- **Failed or interrupted apply**: the deployment ends as `Failed`/`worker_lost`; request a new plan, which
+  shows Terraform's partial state; a held state lock needs `terraform force-unlock` by the operator.
+- **Data**: PostgreSQL flexible server point-in-time restore (7 days retention) creates a new server; this
+  is outside the Factory and was not exercised; the free tier covers one B1MS server only.
+

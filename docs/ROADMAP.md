@@ -432,7 +432,8 @@ operator commands) is implemented and the StockFlow release runs on Azure stagin
 [Deployment](DEPLOYMENT.md). M13A.2 (durable deployments with plan-bound approval in the Product
 Workspace) is implemented and verified live; M13A.3 (Factory-managed hosting path) follows.
 M14: the StockFlow pilot runs end to end on Azure staging (API, web app and database, user-approved
-deployment, functional checks in the browser); the recovery exercise is still open, see [Pilot](PILOT.md).
+deployment, functional checks in the browser); the recovery exercise was not run by user decision (procedure
+documented), see [Pilot](PILOT.md).
 
 ## M15 — SaaS Beta Hardening
 
