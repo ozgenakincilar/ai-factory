@@ -112,6 +112,7 @@ public class DeveloperAgentTests
     private sealed class FakeVerifier(params SandboxOutcome[] outcomes) : ISandbox
     {
         private int _next;
+        public int Runs => _next;
         public IReadOnlyList<TemplateFile>? Files;
         public Task<SandboxReport> RunAsync(IReadOnlyList<TemplateFile> workspace, IReadOnlyList<SandboxStep> steps, CancellationToken ct = default)
         {
@@ -138,7 +139,7 @@ public class DeveloperAgentTests
     {
         var model = new ScriptedModel(
             DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Domain/Common/AggregateRoot.cs"),
-                DeveloperScripts.Write("src/SampleShop.Domain/Tasks/TaskItem.cs", string.Format(DeveloperScripts.TaskItem, "SampleShop"), "FR-1"),
+                DeveloperScripts.Write("src/SampleShop.Domain/Tasks/TaskItem.cs", string.Format(DeveloperScripts.TaskItem, "SampleShop"), "FR-1", "FR-2"),
                 DeveloperScripts.Write("tests/SampleShop.Tests/TaskItemTests.cs", string.Format(DeveloperScripts.TaskItemTests, "SampleShop"), "FR-1"),
                 DeveloperScripts.Act(DeveloperActionKind.Build), DeveloperScripts.Act(DeveloperActionKind.Test)),
             DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "TaskItem with a required title")));
@@ -146,7 +147,7 @@ public class DeveloperAgentTests
         var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
         Assert.Equal((DevelopmentStatus.Verified, (string?)null, 2, 6), (result.Status, result.FailureCode, result.Turns, result.Actions));
         Assert.Equal(["src/SampleShop.Domain/Tasks/TaskItem.cs", "tests/SampleShop.Tests/TaskItemTests.cs"], result.Changes.Select(c => c.Path));
-        Assert.All(result.Changes, c => Assert.Equal(["FR-1"], c.RequirementIds));
+        Assert.Equal([["FR-1", "FR-2"], ["FR-1"]], result.Changes.Select(c => c.RequirementIds));
         Assert.Equal(["dotnet-restore", "dotnet-build", "dotnet-test"], session.Ran);
         Assert.Equal(2, session.Written.Count);
         // The final verification receives exactly the authoritative files, including the agent's edits.
@@ -195,6 +196,77 @@ public class DeveloperAgentTests
         Assert.Contains("[read src/SampleShop.Api/Program.cs] already known", model.Prompts[2]);
     }
 
+    // M14 live finding: a model that wrote nothing finished three times and used up its corrections.
+    [Fact]
+    public async Task FinishingWithoutChanges_IsRefused_WithoutSpendingACorrection()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "nothing to do")),
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;\n", "FR-1", "FR-2"),
+                new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var (agent, workspace, _, verifier) = Create(model);
+        var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal((DevelopmentStatus.Verified, 0, 2), (result.Status, result.Corrections, result.Turns));
+        Assert.Contains("[finish] refused: nothing has been written yet", model.Prompts[1]);
+        Assert.Equal(1, verifier.Runs);
+    }
+
+    // M14 live finding: web unit tests passed while `ng build` failed on template type errors, which the
+    // agent saw only in the final verification. With web changes, build now also runs ng build.
+    [Fact]
+    public async Task BuildingAfterWebChanges_AlsoRunsTheWebBuild()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Build)),
+            DeveloperScripts.Turn(DeveloperScripts.Write("web/src/app/products.ts", "export const products = [];\n", "FR-1"),
+                DeveloperScripts.Act(DeveloperActionKind.Build), DeveloperScripts.Act(DeveloperActionKind.Build)),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var (agent, workspace, session, _) = Create(model);
+        await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Equal(["dotnet-restore", "dotnet-build", "dotnet-restore", "dotnet-build", "npm-ci", "web-build", "dotnet-restore", "dotnet-build", "web-build"],
+            session.Ran);
+        Assert.Contains("web-build: passed", model.Prompts[2]);
+    }
+
+    // M14 live finding: a lock file larger than the known-files budget was listed as "not shown, read again",
+    // and reading it again answered "already known", so the model kept reading and never wrote.
+    [Fact]
+    public async Task FilesTooLargeToShow_AreNeverClaimedAsKnown()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "web/package-lock.json"),
+                DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Api/Program.cs")),
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "web/package-lock.json")),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        var (agent, workspace, _, _) = Create(model);
+        await agent.RunAsync(DeveloperScripts.Task, workspace);
+        foreach (var prompt in model.Prompts.Skip(1))
+        {
+            Assert.DoesNotContain("=== web/package-lock.json ===", prompt);
+            Assert.DoesNotContain("read again if needed: web/package-lock.json", prompt);
+        }
+        Assert.Contains("[read web/package-lock.json] too large to show", model.Prompts[1]);
+        Assert.Contains("[read web/package-lock.json] too large to show", model.Prompts[2]);
+        Assert.Contains("=== src/SampleShop.Api/Program.cs ===", model.Prompts[1]);
+    }
+
+    [Fact]
+    public async Task AFileLeftOutForSpace_IsNotAnsweredAsAlreadyKnown()
+    {
+        var model = new ScriptedModel(
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Api/Program.cs"),
+                DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Domain/Common/DomainException.cs"),
+                DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Domain/Common/IDomainEvent.cs")),
+            DeveloperScripts.Turn(DeveloperScripts.Act(DeveloperActionKind.Read, "src/SampleShop.Api/Program.cs")),
+            DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
+        // Each file fits on its own, all three do not: the oldest (Program.cs) is left out of the prompt.
+        var (agent, workspace, _, _) = Create(model, DevelopmentLimits.Default with { MaxKnownFileChars = 800 });
+        await agent.RunAsync(DeveloperScripts.Task, workspace);
+        Assert.Contains("not shown for space", model.Prompts[1]);
+        Assert.Contains("[read src/SampleShop.Api/Program.cs] ok (content under Known files)", model.Prompts[2]);
+        Assert.Contains("=== src/SampleShop.Api/Program.cs ===", model.Prompts[2]);
+    }
+
     [Fact]
     public async Task AModelThatOnlyReads_IsToldTheFeatureIsNew_AndRemindedToWrite()
     {
@@ -211,9 +283,9 @@ public class DeveloperAgentTests
     public async Task AFailedVerification_IsReturnedToTheAgent_ThatCorrectsAndIsVerified()
     {
         var model = new ScriptedModel(
-            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;", "FR-1"),
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;", "FR-1", "FR-2"),
                 new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done, all tests pass")),
-            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;\n", "FR-1"),
+            DeveloperScripts.Turn(DeveloperScripts.Write("src/SampleShop.Domain/Note.cs", "namespace SampleShop.Domain;\n", "FR-1", "FR-2"),
                 new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "fixed")));
         var (agent, workspace, _, _) = Create(model, verifications: [SandboxOutcome.Failed, SandboxOutcome.Passed]);
         var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
@@ -249,7 +321,8 @@ public class DeveloperAgentTests
             DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "done")));
         var (agent, workspace, session, _) = Create(model, verification: SandboxOutcome.Failed);
         var result = await agent.RunAsync(DeveloperScripts.Task, workspace);
-        Assert.Equal((DevelopmentStatus.VerificationFailed, "check_sandbox"), (result.Status, result.FailureCode));
+        // Nothing was accepted, so finishing is refused (no verification is spent) until the turn limit.
+        Assert.Equal((DevelopmentStatus.NotFinished, "turn_limit_reached"), (result.Status, result.FailureCode));
         Assert.Empty(result.Changes);
         Assert.Empty(session.Written);
         // Six actions, six rejections: two protected files, an unknown and a missing requirement, two unsafe paths.

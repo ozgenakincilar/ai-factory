@@ -77,7 +77,11 @@ https://stock-flow-staging-9b228545.azurewebsites.net (health 200, Key Vault ref
 module 1.1.0); see [Deployment](DEPLOYMENT.md). M13A.2 (durable deployments: targets bound to projects,
 plan-bound Owner/Admin approval in the Product Workspace, release rebuilt and hash-checked at apply, Key
 Vault reference check) is implemented; a live deployment requested in the browser and approved by the
-user there Succeeded (empty plan, health 200, reference Resolved).
+user there Succeeded (empty plan, health 200, reference Resolved). M14: the StockFlow pilot runs end to
+end at https://stock-flow-staging-9b228545.azurewebsites.net (template 1.1.3 job 879bcc1d, user-approved
+deployment 88cfbf3a; API and web app verified in the browser); eleven live findings were fixed in the
+agent, the checks, the release builder and the template (now 1.1.3); the recovery exercise is open; see
+[Pilot](PILOT.md).
 
 ## Milestone 8.1 current handoff
 
@@ -297,6 +301,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 11.3 | Committed/pushed pull request publisher, 7ea0d6b (1004 passed); live PR stockflow#1 opened, see VERIFICATION_AND_PULL_REQUESTS.md |
 | 13A.1 | Deployment engine, Azure module (1.1.0), sandbox release packages, operator plan/approve/apply; StockFlow live on Azure staging (France Central), see DEPLOYMENT.md |
 | 13A.2 | Durable deployments with Owner/Admin approval of the exact plan in the Product Workspace; live user-approved deployment Succeeded, see DEPLOYMENT.md |
+| 14 | StockFlow pilot live end to end (templates 1.1.0–1.1.3, module 1.2.0, agent and check fixes); recovery exercise open, see PILOT.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

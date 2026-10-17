@@ -44,9 +44,28 @@ public sealed class SandboxReleaseBuilder(DockerSandboxOptions options) : IRelea
         await Run("git-final-commit", DeploymentError.ReleaseBuildFailed, [.. git, "commit", "-q", "--allow-empty", "-m", "Developer Agent changes"]);
         if ((await Run("git-rev-parse", DeploymentError.ReleaseBuildFailed, [.. git, "rev-parse", "HEAD"])).Trim() != evidence.FinalCommit)
             throw new DeploymentException(DeploymentError.ReleaseCommitMismatch, "final_commit_mismatch");
+        // M14: the Angular build is served by the API, so it goes into the API's wwwroot before publishing.
+        if (baseFiles.Any(f => f.Path == "web/package.json"))
+        {
+            const string web = SandboxStep.Root + "/web";
+            async Task Web(string step, params string[] arguments)
+            {
+                var result = await session.RunAsync(new SandboxStep(step, arguments, web), ct);
+                if (result.Outcome != StepOutcome.Passed) throw new DeploymentException(DeploymentError.ReleaseBuildFailed, step + "_failed: " + Tail(result.Output));
+            }
+            await Web("npm-ci", "npm", "ci", "--offline", "--ignore-scripts");
+            await Web("web-build", "npx", "--no-install", "ng", "build");
+            // Fixed timestamps: publish writes the files' modification times into the static web assets
+            // manifest (Last-Modified), which would make every rebuild's package different.
+            await Run("web-copy", DeploymentError.ReleaseBuildFailed, "sh", "-c",
+                "mkdir -p \"$1\" && cp -R \"$2\"/. \"$1\"/ && find \"$1\" -exec touch -h -d 2026-01-01T00:00:00Z {} +", "sh",
+                $"{SandboxStep.Root}/src/{name.Value}.Api/wwwroot", $"{web}/dist/{name.Kebab}/browser");
+        }
         var project = $"src/{name.Value}.Api/{name.Value}.Api.csproj";
         await Run("dotnet-publish", DeploymentError.ReleaseBuildFailed,
-            "dotnet", "publish", project, "-c", "Release", "-o", Output, "-nodeReuse:false", "-p:NuGetAudit=false", "-p:UseAppHost=false");
+            "dotnet", "publish", project, "-c", "Release", "-o", Output, "-nodeReuse:false", "-p:NuGetAudit=false", "-p:UseAppHost=false",
+            // Build-time compressed copies of static assets carry build-time Last-Modified values in the endpoints manifest.
+            "-p:CompressionEnabled=false");
         byte[] tar;
         try { tar = await session.ExportAsync(Output, ReleasePackage.MaxBytes, ct); }
         catch (SandboxUnavailableException e) when (e.Code == "output_too_large") { throw new DeploymentException(DeploymentError.PackageTooLarge); }

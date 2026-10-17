@@ -147,7 +147,8 @@ public interface IReleaseBuilder
 
 public interface IHealthChecker
 {
-    Task<HealthResult> CheckAsync(string baseUrl, CancellationToken ct = default);
+    // path: the template's readiness endpoint (1.1.0+: /health/ready, which needs the database), else /health.
+    Task<HealthResult> CheckAsync(string baseUrl, string path = "/health", CancellationToken ct = default);
 }
 
 public static class DeploymentRules

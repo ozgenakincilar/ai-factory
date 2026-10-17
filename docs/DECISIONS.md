@@ -373,6 +373,23 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M14 StockFlow pilot (2026-10-17, delegated)
+
+Taken under the user's approval ("devam et"); open to review. Details and evidence: [Pilot](PILOT.md).
+
+- **One App Service for API and web**: the release package puts the Angular build into the API's wwwroot
+  (no second host, no extra cost); templates 1.1.x serve it with a client-route fallback.
+- **Schema at startup for staging** (`Database:InitializeSchema`, module 1.2.0) instead of migrations for now;
+  1.1.3 creates the model's missing tables and never alters existing ones. Versioned migrations remain open.
+- **Readiness endpoint** `/health/ready` (database reachable) is what deployments check for templates that
+  declare it (`readinessPath` in the template registry).
+- **Template versions are immutable once a verified job names them**: fixes became 1.1.1, 1.1.2 and 1.1.3.
+- **Requirement coverage is blocking for confirmed requirements**: a confirmed functional requirement without
+  any change means the job is not done; uncovered suggestions stay a warning (changes the M11.1 advisory rule).
+- **Finishing without changes is refused** without spending a correction; the agent's build also runs
+  `ng build` after web changes.
+- Developer spend for the pilot stayed within the user's USD 2 total (about USD 1.11 used in all).
+
 ## M13A.2 durable deployments (2026-10-17, delegated)
 
 Taken under the user's full approval ("et", "tam onayıma sahipsin"); open to review.

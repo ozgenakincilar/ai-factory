@@ -17,7 +17,7 @@ public static class DeploymentDefaults
 {
     public const string TerraformImage = "hashicorp/terraform@sha256:c7926feace05d0f7e73542842bf3945924e955a1f782cf000ccbb8d18fa42d77";
     public const string ModuleId = "azure-app-service-postgres";
-    public const string ModuleVersion = "1.1.0";
+    public const string ModuleVersion = "1.2.0";
 }
 
 // Image must be pinned by digest. PluginCache keeps downloaded providers between runs; the module's

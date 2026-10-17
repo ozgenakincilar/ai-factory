@@ -41,10 +41,12 @@ public class ChangeVerificationTests
         ], violations);
     }
 
-    private static DevelopmentWorkspace Workspace(params (string Path, string Content)[] writes)
+    private static DevelopmentWorkspace Workspace(params (string Path, string Content)[] writes) => Workspace(["FR-1"], writes);
+
+    private static DevelopmentWorkspace Workspace(string[] requirements, params (string Path, string Content)[] writes)
     {
         var workspace = new DevelopmentWorkspace(DevelopmentWorkspaceTests.Application("SampleShop"));
-        foreach (var (path, content) in writes) workspace.Write(path, content, ["FR-1"]);
+        foreach (var (path, content) in writes) workspace.Write(path, content, requirements);
         return workspace;
     }
 
@@ -71,16 +73,32 @@ public class ChangeVerificationTests
     }
 
     [Fact]
-    public void LayerViolations_Block_AndCoverageAndTests_AreWarnings()
+    public void LayerViolations_AndUncoveredRequirementsBlock_MissingTestsAreAWarning()
     {
         var violating = Workspace(("src/SampleShop.Domain/Products/Product.cs", "using Microsoft.EntityFrameworkCore;\nnamespace SampleShop.Domain.Products;"));
         var verdict = ChangeChecks.Evaluate(DeveloperScripts.Task, violating, Report(violating, DeveloperScripts.TestReportOutput("SampleShop")), null);
         Assert.Equal("check_layers", verdict.FailureCode);
-        // FR-2 is never referenced and no tests were added: reported, not blocking.
-        Assert.Contains(verdict.Checks, c => c.Name == "requirement_coverage" && c.Status == CheckStatus.Warning && c.Detail.Contains("FR-2"));
-        Assert.Contains(verdict.Checks, c => c.Name == "new_tests" && c.Status == CheckStatus.Warning);
+        // FR-2 is only a suggestion and never referenced: a warning. No tests were added: a warning.
+        Assert.Contains(verdict.Checks, c => c.Name == "requirement_coverage" && c.Status == CheckStatus.Warning && !c.Blocking && c.Detail.Contains("FR-2"));
+        Assert.Contains(verdict.Checks, c => c.Name == "new_tests" && c.Status == CheckStatus.Warning && !c.Blocking);
 
-        var clean = Workspace(("src/SampleShop.Domain/Products/Product.cs", "namespace SampleShop.Domain.Products;"));
+        // A CONFIRMED requirement without any change blocks since M14 (a live job was "verified" without the
+        // requested web screen).
+        var confirmed = DeveloperScripts.Task with
+        {
+            Analysis = DeveloperScripts.Task.Analysis with
+            {
+                FunctionalRequirements = [.. DeveloperScripts.Task.Analysis.FunctionalRequirements
+                    .Select(r => r with { Status = Factory.Core.Analysis.RequirementStatus.Confirmed })],
+            },
+        };
+        var partial = Workspace(("src/SampleShop.Domain/Products/Product.cs", "namespace SampleShop.Domain.Products;"));
+        var uncovered = ChangeChecks.Evaluate(confirmed, partial, Report(partial, DeveloperScripts.TestReportOutput("SampleShop")), null);
+        Assert.Equal("check_requirement_coverage", uncovered.FailureCode);
+        Assert.Contains("FR-2", uncovered.Findings);
+        Assert.True(ChangeChecks.Evaluate(DeveloperScripts.Task, partial, Report(partial, DeveloperScripts.TestReportOutput("SampleShop")), null).Verified);
+
+        var clean = Workspace(["FR-1", "FR-2"], ("src/SampleShop.Domain/Products/Product.cs", "namespace SampleShop.Domain.Products;"));
         var passed = ChangeChecks.Evaluate(DeveloperScripts.Task, clean, Report(clean, DeveloperScripts.TestReportOutput("SampleShop")), null);
         Assert.True(passed.Verified);
         Assert.Contains(passed.Checks, c => c.Name == "protected_files" && c.Status == CheckStatus.Passed);

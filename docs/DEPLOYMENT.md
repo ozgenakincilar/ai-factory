@@ -187,6 +187,13 @@ keep the free-account services (user decision when it comes to that).
    **4 passed**, remaining pass **1034 passed, 0 failed, 1 skipped** (the paid live Developer Agent test);
    `LifecycleMigrationTests` expects 21 migrations.
 
+## M14 additions
+
+- Release packages include the Angular build in the API's `wwwroot` (npm ci and ng build offline in the
+  sandbox), with fixed timestamps and `CompressionEnabled=false` so rebuilds are byte-identical.
+- Module **1.2.0** sets `Database__InitializeSchema=true`; deployments check the template's
+  `readinessPath` (`/health/ready` for 1.1.x) instead of `/health`. See [Pilot](PILOT.md).
+
 ## Limits
 
 - The free App Service plan has no virtual network integration, so the database firewall allows

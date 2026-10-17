@@ -118,9 +118,15 @@ public class SandboxIsolationTests
     }
 
     [SandboxFact]
-    public async Task GeneratedApplication_PassesAllStepsOffline()
+    public async Task GeneratedApplication_PassesAllStepsOffline() => await PassesAllStepsOffline(TemplateRepository.Version);
+
+    // 1.1.0: static web hosting, readiness with the database (503 offline), opt-in schema creation.
+    [SandboxFact]
+    public async Task GeneratedApplication_OfTheCurrentVersion_PassesAllStepsOffline() => await PassesAllStepsOffline(TemplateRepository.Current);
+
+    private async Task PassesAllStepsOffline(string version)
     {
-        var (template, files) = new FileSystemTemplateCatalog(TemplateRepository.Root()).Load(TemplateRepository.Id, TemplateRepository.Version);
+        var (template, files) = new FileSystemTemplateCatalog(TemplateRepository.Root()).Load(TemplateRepository.Id, version);
         var name = ApplicationName.Create("SampleShop");
         var application = StarterGenerator.Generate(template, files, name);
         var report = await Sandbox().RunAsync(application.Files, StarterVerification.Steps(name));

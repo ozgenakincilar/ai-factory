@@ -17,6 +17,13 @@ readiness.
 
 ## M9.1 — starter template
 
+Later versions (M14, see [Pilot](PILOT.md)), each in its own directory and immutable once a verified job names
+it: **1.1.0** (`starter-v1.1`: `/health/ready` with the database, static web hosting from `wwwroot`, opt-in
+schema creation, `provideHttpClient`, EF model test, `DomainEvents` not mapped), **1.1.1** (`nonfile` fallback,
+`DomainException` → 400), **1.1.2** (controllers mapped too), **1.1.3** (creates the model's missing tables next
+to existing ones). The registry's optional `readinessPath` names the endpoint deployments check. New
+development jobs use 1.1.3.
+
 - **Template** `dotnet-angular-postgres-ddd` 1.0.0 in `templates/starter-v1/` (37 text files). It is a
   buildable solution under the placeholder name `FactoryStarter` (`factory-starter` for the web app):
   - `FactoryStarter.Domain`: no package or project references; `Entity`, `AggregateRoot` (domain

@@ -10,7 +10,9 @@ public sealed record TemplateFile(string Path, string Content);
 
 // A registered template version. The content hash pins the exact files; Token/KebabToken are the
 // placeholder application names used inside the template (it builds and tests as-is under them).
-public sealed record TemplateDescriptor(string Id, string Version, string Directory, string Token, string KebabToken, string ContentSha256);
+// ReadinessPath (1.1.0+) is the endpoint deployments check, which also needs the database.
+public sealed record TemplateDescriptor(string Id, string Version, string Directory, string Token, string KebabToken, string ContentSha256,
+    string? ReadinessPath = null);
 
 public sealed record GeneratedApplication(string TemplateId, string TemplateVersion, string TemplateSha256,
     ApplicationName Name, IReadOnlyList<TemplateFile> Files, string ManifestSha256);

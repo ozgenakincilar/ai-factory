@@ -3,12 +3,15 @@
 // it from the "Develop" panel (gpt-5.4-mini, USD 0.40 job cap). Reports the outcome; it does not
 // assume success. Requires Keycloak, the API, the web dev server and a worker started with
 // -Verification -Development. Never prints credentials or tokens.
-// Usage: node scripts/Test-FactoryDevelopment.mjs [project]
+// Usage: node scripts/Test-FactoryDevelopment.mjs [project] [ui] [approved review case id]
+//   ui (M14): also asks for the product management screen in the Angular web app (template 1.1.0 serves it).
 import { readFile, mkdir, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const project = process.argv[2] ?? 'factory-workspace';
+const withUi = process.argv[3] === 'ui';
+const existingCase = process.argv[4];
 const app = 'http://127.0.0.1:4200/';
 const settings = JSON.parse(await readFile(resolve('artifacts/keycloak/development.json'), 'utf8'));
 const profile = resolve('artifacts/keycloak/development-browser-profile');
@@ -41,12 +44,15 @@ const step = text => console.log('ok  ' + text);
 const task = 'StockFlow: manage the product catalog. Users create, list, view, update and delete products.';
 const context = 'Use the generated starter application (ASP.NET Core + PostgreSQL + Angular, DDD layers). Business rules belong in the '
   + 'Product aggregate; the application layer exposes use cases through a repository port; Infrastructure persists with EF Core; '
-  + 'the Api exposes /api/products. No new packages are available.';
+  + 'the Api exposes /api/products. No new packages are available.'
+  + (withUi ? ' The Angular app in web/ calls /api/products on the same origin with HttpClient (already provided) and has a products '
+    + 'screen as its start page; keep its unit tests passing.' : '');
 const requirements = [
   'USER-1: A product has a SKU that is required, unique, at most 32 characters of uppercase letters, digits or hyphens',
   'USER-2: A product has a name that is required and at most 100 characters',
   'USER-3: A product has a price that must not be negative',
   'USER-4: Users can create, list, view, update and delete products',
+  ...(withUi ? ['USER-5: The web app lists products and lets users create, edit and delete them'] : []),
 ].join('\n');
 
 try {
@@ -69,6 +75,11 @@ try {
     set('#username', ${JSON.stringify('factory-reviewer')}); set('#password', ${JSON.stringify(settings.HumanPassword)});
     document.querySelector('#kc-login').click(); })()`);
   await until('project list', `[...document.querySelectorAll('.projects a')].some(a => a.textContent.trim() === ${JSON.stringify(project)})`);
+  if (existingCase) {
+    // Develops an already approved review again (no new analysis run).
+    await send('Page.navigate', { url: `${app}projects/${encodeURIComponent(project)}/reviews/${encodeURIComponent(existingCase)}` });
+    step('approved review ' + existingCase + ' opened');
+  } else {
   await evaluate(`[...document.querySelectorAll('.projects a')].find(a => a.textContent.trim() === ${JSON.stringify(project)}).click()`);
   await until('new run form', `document.querySelector('form textarea[name=task]') !== null`);
   const before = await evaluate(`document.querySelectorAll('.runs tbody tr').length`);
@@ -89,6 +100,7 @@ try {
   const requirementCount = await evaluate(`document.querySelectorAll('.requirements tbody tr').length`);
   step(`analysis and architecture published; review shows ${requirementCount} requirements, content verified`);
   await evaluate(`${button('Approve')}.click()`);
+  }
   await until('develop panel', `document.querySelector('app-develop-panel input[name=developName]') !== null`);
   step('review approved; the Develop panel is offered for the approved version');
   await evaluate(setValue('app-develop-panel input[name=developName]', 'StockFlow'));

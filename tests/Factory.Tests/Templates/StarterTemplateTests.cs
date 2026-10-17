@@ -9,6 +9,7 @@ public static class TemplateRepository
 {
     public const string Id = "dotnet-angular-postgres-ddd";
     public const string Version = "1.0.0";
+    public const string Current = "1.1.3";
 
     public static string Root()
     {

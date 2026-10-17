@@ -354,8 +354,15 @@ public class ReleaseBuilderTests
             Assert.Contains("SampleShop.Api.dll", names);
             Assert.Contains("SampleShop.Domain.dll", names);
             Assert.Contains("SampleShop.Api.runtimeconfig.json", names);
+            // M14: the Angular build is served by the API from wwwroot.
+            Assert.Contains("wwwroot/index.html", names);
+            Assert.Contains(names, n => n.StartsWith("wwwroot/main-", StringComparison.Ordinal) && n.EndsWith(".js", StringComparison.Ordinal));
             Assert.DoesNotContain(names, n => n.Contains("factory-release.diff", StringComparison.Ordinal) || n.StartsWith(".git", StringComparison.Ordinal));
         }
+
+        // Deterministic: apply rebuilds the package and requires the planned hash (M14 live finding: build-time
+        // Last-Modified values of compressed static assets made every rebuild differ).
+        Assert.Equal(release.Sha256, (await builder.BuildAsync(job, evidence, application.Files)).Sha256);
 
         // A diff that does not reproduce the evidence's final commit is refused before anything is built.
         var tampered = evidence with { Diff = diff.Diff!.Replace("Note(string Text)", "Note(string Other)", StringComparison.Ordinal) };

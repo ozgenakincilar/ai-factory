@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FactoryStarter.Domain/FactoryStarter.Domain.csproj" />
+    <Project Path="src/FactoryStarter.Application/FactoryStarter.Application.csproj" />
+    <Project Path="src/FactoryStarter.Infrastructure/FactoryStarter.Infrastructure.csproj" />
+    <Project Path="src/FactoryStarter.Api/FactoryStarter.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FactoryStarter.Tests/FactoryStarter.Tests.csproj" />
+  </Folder>
+</Solution>

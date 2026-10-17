@@ -298,12 +298,13 @@ public class DevelopmentJobTests
         Assert.Equal(2, evidence.Calls.Count);
         Assert.Contains(evidence.Checks!, c => c.Name == "layers" && c.Status == CheckStatus.Passed);
 
-        // A job whose model never edits anything ends as not finished, without a diff.
+        // A job whose model never edits anything ends as not finished, without a diff (its finish is refused
+        // each turn, so it ends at the turn limit).
         var (second, secondHash) = await Approved(f);
         var idle = await Durable.Api.SubmitDevelopmentAsync(f.Actor, f.Project, Guid.NewGuid(), Request(second.CaseId, secondHash));
         await Processor(new ScriptedModel(DeveloperScripts.Turn(new DeveloperAction(DeveloperActionKind.Finish, null, null, null, [], "nothing"))))
             .ProcessNextAsync("worker", default);
-        Assert.Equal((DevelopmentJobStatus.NotFinished, "no_changes"),
+        Assert.Equal((DevelopmentJobStatus.NotFinished, "turn_limit_reached"),
             ((await Durable.Api.GetDevelopmentAsync(f.Actor, f.Project, idle.JobId)).Job is var j ? (j.Status, j.FailureCode) : default));
         Assert.Equal(DevelopmentOutcome.Idle, await Processor(model).ProcessNextAsync("worker", default));
     }

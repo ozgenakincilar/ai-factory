@@ -322,7 +322,12 @@ public class DeploymentJobTests
 
     private sealed class FakeChecks(bool resolved) : IHealthChecker, IConfigurationChecker
     {
-        public Task<HealthResult> CheckAsync(string baseUrl, CancellationToken ct = default) => Task.FromResult(new HealthResult(baseUrl + "/health", true, 200, 1, TimeSpan.Zero));
+        public List<string> Paths { get; } = [];
+        public Task<HealthResult> CheckAsync(string baseUrl, string path = "/health", CancellationToken ct = default)
+        {
+            Paths.Add(path);
+            return Task.FromResult(new HealthResult(baseUrl + path, true, 200, 1, TimeSpan.Zero));
+        }
         public Task<ConfigurationCheck> CheckAsync(DeploymentTarget target, IReadOnlyDictionary<string, string> outputs, CancellationToken ct = default)
             => Task.FromResult(new ConfigurationCheck(resolved, [new("ConnectionStrings__Database", resolved ? "Resolved" : "AccessToKeyVaultDenied")]));
     }

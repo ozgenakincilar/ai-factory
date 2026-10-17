@@ -21,7 +21,9 @@ evaluates the change itself (`ChangeChecks`, Factory.Core). The agent's finish s
 - **protected_files**: solution, projects, build settings, package manifests, Git files and the
   architecture tests are identical to the generated base (a second line of defence behind the workspace rules).
 
-Advisory checks: **requirement_coverage** (every approved requirement referenced by a change) and
+**requirement_coverage** (every approved requirement referenced by a change) is **blocking since M14 for
+confirmed requirements** (uncovered suggestions stay a warning): a
+live job was "verified" without any change for the requested web screen (see [Pilot](PILOT.md)). Advisory:
 **new_tests** (the change adds or updates tests). The checks, their details and the number of
 corrections are stored in the development evidence (additive fields of format 1) and shown on the
 development page as "Factory checks", separate from the agent's log.

@@ -72,7 +72,7 @@ public sealed class DeploymentProcessor(IDeploymentQueue queue, ITemplateCatalog
             var plan = new DeploymentPlan(claim.Binding, claim.BindingSha256, claim.PlanFile, claim.Summary, "");
             var approval = new DeploymentApproval(claim.BindingSha256, claim.ApprovedBy, claim.ApprovedAt.Value, claim.AllowDestructive.Value);
             var result = await engine.ApplyAsync(claim.Target, module, release, plan, approval, ct);
-            var checkedHealth = await health.CheckAsync(result.Url, ct);
+            var checkedHealth = await health.CheckAsync(result.Url, ReadinessPath(evidence), ct);
             var checkedConfiguration = await configuration.CheckAsync(claim.Target, result.Outputs, ct);
             var failure = !checkedHealth.Healthy ? "health_check_failed" : !checkedConfiguration.Resolved ? "configuration_unresolved" : null;
             await queue.CompleteDeploymentAsync(claim.DeploymentId, token, failure is null, result.Url,
@@ -88,6 +88,8 @@ public sealed class DeploymentProcessor(IDeploymentQueue queue, ITemplateCatalog
     }
 
     // The evidence must be this verified job's; the base files come from the hash-verified template.
+    private string ReadinessPath(DevelopmentEvidence evidence) => templates.Load(evidence.TemplateId, evidence.TemplateVersion).Template.ReadinessPath ?? "/health";
+
     private (DevelopmentEvidence Evidence, IReadOnlyList<TemplateFile> BaseFiles) Source(ClaimedDeployment claim)
     {
         DevelopmentEvidence? evidence;

@@ -4,17 +4,19 @@ using Factory.Core.Deployment;
 
 namespace Factory.Infrastructure.Deployment;
 
-// Healthy means GET <base>/health answers 200 with {"status":"ok"} (the starter template's endpoint).
+// Healthy means GET <base><path> answers 200 with {"status":"ok"}: /health (liveness) or, for templates
+// 1.1.0+, /health/ready (the database answers too).
 // A free-tier App Service starts cold, so the check retries for a bounded time.
 public sealed class HttpHealthChecker(HttpClient http, int attempts = 20, TimeSpan? delay = null) : IHealthChecker
 {
     private readonly TimeSpan _delay = delay ?? TimeSpan.FromSeconds(15);
 
-    public async Task<HealthResult> CheckAsync(string baseUrl, CancellationToken ct = default)
+    public async Task<HealthResult> CheckAsync(string baseUrl, string path = "/health", CancellationToken ct = default)
     {
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
             throw new DeploymentException(DeploymentError.InvalidTarget, "health_url_invalid");
-        var health = new Uri(uri, "/health");
+        if (path is not ("/health" or "/health/ready")) throw new DeploymentException(DeploymentError.InvalidTarget, "health_path_invalid");
+        var health = new Uri(uri, path);
         var clock = Stopwatch.StartNew();
         int? status = null;
         for (var attempt = 1; attempt <= attempts; attempt++)

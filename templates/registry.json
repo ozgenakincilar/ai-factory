@@ -7,6 +7,42 @@
       "token": "FactoryStarter",
       "kebabToken": "factory-starter",
       "contentSha256": "2e41c7460734330ee90de0bcaed0f096f489ff3563fef099b876fa01add41323"
+    },
+    {
+      "id": "dotnet-angular-postgres-ddd",
+      "version": "1.1.0",
+      "directory": "starter-v1.1",
+      "token": "FactoryStarter",
+      "kebabToken": "factory-starter",
+      "contentSha256": "87d320312c6f26907d167f45781199ba6747e2141ae84811340a5179f8bbf217",
+      "readinessPath": "/health/ready"
+    },
+    {
+      "id": "dotnet-angular-postgres-ddd",
+      "version": "1.1.1",
+      "directory": "starter-v1.1.1",
+      "token": "FactoryStarter",
+      "kebabToken": "factory-starter",
+      "contentSha256": "2b14596baaae30a2734d0a6d8494e7d43cc8e90caa197a0e220b84354520c709",
+      "readinessPath": "/health/ready"
+    },
+    {
+      "id": "dotnet-angular-postgres-ddd",
+      "version": "1.1.2",
+      "directory": "starter-v1.1.2",
+      "token": "FactoryStarter",
+      "kebabToken": "factory-starter",
+      "contentSha256": "ff8886c11f5f8dc7c0cd97a76c87bf2d105fc8c263f43bf311bd7c26a2c375e0",
+      "readinessPath": "/health/ready"
+    },
+    {
+      "id": "dotnet-angular-postgres-ddd",
+      "version": "1.1.3",
+      "directory": "starter-v1.1.3",
+      "token": "FactoryStarter",
+      "kebabToken": "factory-starter",
+      "contentSha256": "949cfea085a1d646c92789740e119c686840a448899ac03c70b61c5901052496",
+      "readinessPath": "/health/ready"
     }
   ]
 }

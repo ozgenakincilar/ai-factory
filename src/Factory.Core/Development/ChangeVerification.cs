@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Factory.Core.Analysis;
 using Factory.Core.Execution;
 using Factory.Core.Templates;
 
@@ -74,9 +75,17 @@ public static partial class ChangeChecks
 
         var changes = workspace.Changes();
         var covered = changes.SelectMany(c => c.RequirementIds).ToHashSet(StringComparer.Ordinal);
-        var uncovered = task.RequirementIds.Where(id => !covered.Contains(id)).OrderBy(id => id, StringComparer.Ordinal).ToList();
-        checks.Add(new("requirement_coverage", uncovered.Count == 0 ? CheckStatus.Passed : CheckStatus.Warning, false,
-            uncovered.Count == 0 ? "every approved requirement is referenced by a change" : "no change references " + string.Join(", ", uncovered)));
+        var uncovered = task.Analysis.FunctionalRequirements.Where(r => !covered.Contains(r.Id)).OrderBy(r => r.Id, StringComparer.Ordinal).ToList();
+        var uncoveredConfirmed = uncovered.Where(r => r.Status == RequirementStatus.Confirmed).Select(r => r.Id).ToList();
+        // Blocking since M14 for CONFIRMED requirements: a job that leaves one untouched is not done (a live
+        // run was "verified" without the requested web screen). Uncovered suggestions stay a warning.
+        // Requirement links are the agent's claims; reviewers still judge whether the changes implement them.
+        checks.Add(uncoveredConfirmed.Count > 0
+            ? new("requirement_coverage", CheckStatus.Failed, true, "no change implements the confirmed requirement(s) " +
+                string.Join(", ", uncoveredConfirmed) + "; implement them (each write lists the requirements it implements)")
+            : new("requirement_coverage", uncovered.Count == 0 ? CheckStatus.Passed : CheckStatus.Warning, false,
+                uncovered.Count == 0 ? "every approved requirement is referenced by a change"
+                    : "every confirmed requirement is referenced; no change references the suggestion(s) " + string.Join(", ", uncovered.Select(r => r.Id))));
 
         var addedTests = changes.Any(c => c.Kind != FileChangeKind.Deleted && c.Path.StartsWith($"tests/{name}.Tests/", StringComparison.Ordinal));
         checks.Add(new("new_tests", addedTests ? CheckStatus.Passed : CheckStatus.Warning, false,

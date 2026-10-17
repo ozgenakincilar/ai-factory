@@ -34,7 +34,7 @@ export interface RunRequest { task: string; context: string; confirmedRequiremen
 export interface RunSubmission { runId: string; status: RunStatus; replayed: boolean; }
 
 // Verification jobs (M9.3): a generated starter application verified offline in the sandbox.
-export const starterTemplate = { id: 'dotnet-angular-postgres-ddd', version: '1.0.0' } as const;
+export const starterTemplate = { id: 'dotnet-angular-postgres-ddd', version: '1.1.3' } as const;
 export type VerificationStatus = 'queued' | 'running' | 'passed' | 'failed' | 'timedOut' | 'sandboxError';
 export interface VerificationSummary {
   jobId: string; templateId: string; templateVersion: string; applicationName: string; status: VerificationStatus;

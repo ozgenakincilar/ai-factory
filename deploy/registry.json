@@ -11,6 +11,12 @@
       "version": "1.1.0",
       "directory": "azure/app-service-postgres-1.1.0",
       "contentSha256": "b3629633fd81fa0ecd85196ce074bd5957a6ee2712ded9295ce60dfe69e97c79"
+    },
+    {
+      "id": "azure-app-service-postgres",
+      "version": "1.2.0",
+      "directory": "azure/app-service-postgres-1.2.0",
+      "contentSha256": "ecd3c0ffd5b42d951cfa6893204f7f918dcafe77f4f2daae455cc3bdadcd9ceb"
     }
   ]
 }
