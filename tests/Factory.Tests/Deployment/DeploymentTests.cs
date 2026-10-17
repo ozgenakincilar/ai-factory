@@ -16,8 +16,8 @@ internal static class DeploymentSamples
     internal const string Subscription = "11111111-2222-3333-4444-555555555555";
     internal const string Tenant = "66666666-7777-8888-9999-000000000000";
 
-    internal static DeploymentTarget Target(string resourceGroup = "rg-stock-flow-staging-weu") => new("azure", "staging", "stock-flow", Subscription, Tenant,
-        "westeurope", resourceGroup, "0a1b2c3d", "rg-factory-tfstate-weu", "stfactorytf111111112222", "tfstate-stock-flow-staging", "stock-flow-staging.tfstate");
+    internal static DeploymentTarget Target(string resourceGroup = "rg-stock-flow-staging-frc") => new("azure", "staging", "stock-flow", Subscription, Tenant,
+        "francecentral", resourceGroup, "0a1b2c3d", "rg-factory-tfstate-frc", "stfactorytf111111112222", "tfstate-stock-flow-staging", "stock-flow-staging.tfstate");
 
     internal static DeploymentModule Module => new("azure-app-service-postgres", "1.0.0", "azure/app-service-postgres", new string('c', 64));
 

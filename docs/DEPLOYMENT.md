@@ -7,10 +7,17 @@ be run by the user (the agent's permission policy does not allow it to grant clo
 Durable deployment jobs with approval in the Product Workspace are **M13A.2**; the Factory-managed hosting
 path is **M13A.3**.
 
-## Target and cost (user decisions: own subscription, West Europe, USD 5/month)
+## Target and cost (user decisions: own subscription, France Central, USD 5/month)
 
 Subscription: the user's Azure free trial (`FreeTrial_2014-09-01`, spending limit on, verified
-2026-10-17). One staging target per application, all in West Europe:
+2026-10-17). The user first chose West Europe; creating the state storage account there failed with
+`RequestDisallowedByAzure` ("the selected region is currently not accepting new customers"). ARM preflight
+validation (`az deployment group validate`, nothing created) of a storage account, an F1 Linux plan and a
+B1MS PostgreSQL server then passed in Sweden Central, France Central, Italy North, Poland Central,
+Switzerland North and Spain Central, and failed in West Europe (disallowed) and North Europe, Germany West
+Central, UK South and Norway East (`SubscriptionIsOverQuotaForSku`). The user chose **France Central**;
+the two empty West Europe resource groups created before the failure were deleted. One staging target
+per application, all in France Central:
 
 | Resource | SKU | Expected cost |
 | --- | --- | --- |
@@ -56,7 +63,7 @@ keep the free-account services (user decision when it comes to that).
 
 1. Once per target, with the operator's own `az login` (subscription Owner):
    `scripts/Initialize-AzureStaging.ps1 -Application stock-flow -AlertEmail <address>` creates the target
-   resource group `rg-stock-flow-staging-weu`, the state resource group, storage account and the
+   resource group `rg-stock-flow-staging-frc`, the state resource group, storage account and the
    container `tfstate-stock-flow-staging`, registers the resource providers, creates the service
    principal `factory-deploy-stock-flow-staging` with **Contributor on the target resource group and
    Storage Blob Data Contributor on that state container only**, writes its secret (expires after 30
@@ -74,7 +81,7 @@ keep the free-account services (user decision when it comes to that).
 ## Executed verification M13A.1 — 2026-10-17
 
 1. Azure subscription inspected read-only after `az login`: Free Trial, spending limit on, enabled, no
-   resource groups, resources or budgets; West Europe offers PostgreSQL flexible server Burstable
+   resource groups, resources or budgets; West Europe listed PostgreSQL flexible server Burstable
    (B1MS) and App Service Linux `DOTNETCORE|10.0`.
 2. Terraform image pulled by tag and pinned by digest; `terraform validate` of the module (without the
    backend): valid; `terraform fmt -check`: clean after formatting; `providers lock -platform=linux_amd64`

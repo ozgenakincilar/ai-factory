@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory)][ValidatePattern('\A[a-z][a-z0-9-]{1,30}[a-z0-9]\z')][string]$Application,
     [Parameter(Mandatory)][string]$AlertEmail,
-    [ValidateSet('westeurope')][string]$Location = 'westeurope',
+    [ValidateSet('francecentral','swedencentral','italynorth','polandcentral','westeurope')][string]$Location = 'francecentral',
     [ValidateRange(1,50)][int]$BudgetUsd = 5,
     [ValidateRange(1,90)][int]$SecretDays = 30
 )
@@ -37,8 +37,11 @@ $account = Invoke-AzCli account show -o json | ConvertFrom-Json
 $subscription=$account.id; $tenant=$account.tenantId
 $hash=([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes("$subscription/$Application/staging"))) -replace '-','').ToLowerInvariant()
 $suffix=$hash.Substring(0,8)
-$targetGroup="rg-$Application-staging-weu"
-$stateGroup='rg-factory-tfstate-weu'
+# West Europe refused new free-trial resources on 2026-10-17 (RequestDisallowedByAzure); France Central is
+# the user's choice. The region code keeps resource group names unambiguous.
+$code=@{francecentral='frc';swedencentral='sdc';italynorth='itn';polandcentral='plc';westeurope='weu'}[$Location]
+$targetGroup="rg-$Application-staging-$code"
+$stateGroup="rg-factory-tfstate-$code"
 $stateAccount='stfactorytf'+$subscription.Replace('-','').Substring(0,12)
 $container="tfstate-$Application-staging"
 $identityName="factory-deploy-$Application-staging"

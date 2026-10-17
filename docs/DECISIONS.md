@@ -476,6 +476,9 @@ Taken under the user's delegated authority after the confirmations above; open t
 - 2026-10-17: the user reported a subscription with USD 200 credit; after `az login` it was inspected
   read-only: "Azure subscription 1", offer Free Trial (`FreeTrial_2014-09-01`), spending limit on,
   enabled, empty. The user then gave full approval for M13A ("tam onayım var").
+- 2026-10-17: West Europe refused new free-trial resources (`RequestDisallowedByAzure`, region not
+  accepting new customers). After a preflight comparison of eligible regions the user chose
+  **France Central** for the pilot (see [Deployment](DEPLOYMENT.md)).
 
 ## Review page — M12b (2026-10-16, delegated)
 
