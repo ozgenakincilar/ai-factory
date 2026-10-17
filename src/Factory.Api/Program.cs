@@ -103,6 +103,7 @@ app.MapReviewEndpoints();
 app.MapLifecycle(legacyGeneration);
 app.MapDurableWorkflows();
 app.MapDevelopments();
+app.MapDeployments();
 if (legacyGeneration)
     app.MapPost("/api/workflows/analysis-architecture", WorkflowEndpoint.ExecuteAsync)
         .RequireAuthorization().AddEndpointFilter<ProjectGenerationFilter>();

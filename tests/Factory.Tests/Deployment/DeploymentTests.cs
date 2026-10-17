@@ -366,3 +366,62 @@ public class ReleaseBuilderTests
         await Assert.ThrowsAsync<DeploymentException>(() => builder.BuildAsync(job, evidence with { Status = DevelopmentJobStatus.VerificationFailed }, application.Files));
     }
 }
+
+public class ConfigurationCheckerTests
+{
+    private sealed class FakeAzure(params string[] statuses) : HttpMessageHandler
+    {
+        public List<(HttpMethod Method, string Url, string? Body, string? Auth)> Requests { get; } = [];
+        private int _reads;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add((request.Method, request.RequestUri!.ToString(), request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken),
+                request.Headers.Authorization?.ToString()));
+            if (request.RequestUri!.Host == "login.example.test")
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"arm-token\",\"token_type\":\"Bearer\"}") };
+            var status = statuses[Math.Min(_reads++, statuses.Length - 1)];
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($$$"""{"value":[{"name":"ConnectionStrings__Database","properties":{"reference":"@Microsoft.KeyVault(SecretUri=https://kv.vault.azure.net/secrets/x)","status":"{{{status}}}"}}]}"""),
+            };
+        }
+    }
+
+    private static AzureConfigurationChecker Checker(FakeAzure azure) => new(new HttpClient(azure),
+        new AzureCredentials(DeploymentSamples.Tenant, DeploymentSamples.Subscription, "client-id", "client-secret-value"), 4, TimeSpan.Zero,
+        "https://login.example.test/", "https://management.example.test/");
+
+    private static readonly Dictionary<string, string> Outputs = new() { ["web_app_name"] = "stock-flow-staging-0a1b2c3d" };
+
+    [Fact]
+    public async Task ReferencesResolvingAfterAColdStart_AreAccepted_WithoutKeepingTheirValues()
+    {
+        var azure = new FakeAzure("AccessToKeyVaultDenied", "Resolved");
+        var check = await Checker(azure).CheckAsync(DeploymentSamples.Target(), Outputs);
+        Assert.True(check.Resolved);
+        Assert.Equal([new ConfigurationReference("ConnectionStrings__Database", "Resolved")], check.References);
+        var token = azure.Requests[0];
+        Assert.Equal(($"https://login.example.test/{DeploymentSamples.Tenant}/oauth2/v2.0/token", HttpMethod.Post), (token.Url, token.Method));
+        Assert.Contains("grant_type=client_credentials", token.Body);
+        Assert.Contains("scope=https%3A%2F%2Fmanagement.example.test%2F.default", token.Body);
+        var read = azure.Requests[1];
+        Assert.Equal(($"https://management.example.test/subscriptions/{DeploymentSamples.Subscription}/resourceGroups/rg-stock-flow-staging-frc" +
+            "/providers/Microsoft.Web/sites/stock-flow-staging-0a1b2c3d/config/configreferences/appsettings?api-version=2023-12-01", "Bearer arm-token"),
+            (read.Url, read.Auth));
+        Assert.All(azure.Requests.Skip(1), r => Assert.Equal(HttpMethod.Get, r.Method));
+    }
+
+    [Fact]
+    public async Task ReferencesThatStayDenied_AreReported()
+    {
+        var check = await Checker(new FakeAzure("AccessToKeyVaultDenied")).CheckAsync(DeploymentSamples.Target(), Outputs);
+        Assert.False(check.Resolved);
+        Assert.Equal("AccessToKeyVaultDenied", check.References.Single().Status);
+    }
+
+    [Fact]
+    public async Task UnexpectedSiteNames_AreRefused() =>
+        await Assert.ThrowsAsync<DeploymentException>(() => Checker(new FakeAzure("Resolved"))
+            .CheckAsync(DeploymentSamples.Target(), new Dictionary<string, string> { ["web_app_name"] = "../../other" }));
+}

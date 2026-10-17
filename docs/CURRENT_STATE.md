@@ -74,7 +74,10 @@ plan-binding approval, `scripts/Deploy-FactoryStaging.ps1`) is implemented and l
 `scripts/Initialize-AzureStaging.ps1` (France Central; West Europe refused new free-trial resources), two
 user-approved plans deployed the StockFlow release of stockflow#1 to
 https://stock-flow-staging-9b228545.azurewebsites.net (health 200, Key Vault reference Resolved with
-module 1.1.0); see [Deployment](DEPLOYMENT.md).
+module 1.1.0); see [Deployment](DEPLOYMENT.md). M13A.2 (durable deployments: targets bound to projects,
+plan-bound Owner/Admin approval in the Product Workspace, release rebuilt and hash-checked at apply, Key
+Vault reference check) is implemented; a live deployment requested in the browser and approved by the
+user there Succeeded (empty plan, health 200, reference Resolved).
 
 ## Milestone 8.1 current handoff
 
@@ -293,6 +296,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 11.1–11.2 | Committed/pushed verification checks and correction loop, db9e00c (992 passed), see VERIFICATION_AND_PULL_REQUESTS.md |
 | 11.3 | Committed/pushed pull request publisher, 7ea0d6b (1004 passed); live PR stockflow#1 opened, see VERIFICATION_AND_PULL_REQUESTS.md |
 | 13A.1 | Deployment engine, Azure module (1.1.0), sandbox release packages, operator plan/approve/apply; StockFlow live on Azure staging (France Central), see DEPLOYMENT.md |
+| 13A.2 | Durable deployments with Owner/Admin approval of the exact plan in the Product Workspace; live user-approved deployment Succeeded, see DEPLOYMENT.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

@@ -12,6 +12,14 @@ public sealed record AzureCredentials(string TenantId, string SubscriptionId, st
     public override string ToString() => $"AzureCredentials {{ TenantId = {TenantId}, SubscriptionId = {SubscriptionId}, ClientId = {ClientId} }}";
 }
 
+// The current pinned engine inputs: the Terraform image and the module version new plans use.
+public static class DeploymentDefaults
+{
+    public const string TerraformImage = "hashicorp/terraform@sha256:c7926feace05d0f7e73542842bf3945924e955a1f782cf000ccbb8d18fa42d77";
+    public const string ModuleId = "azure-app-service-postgres";
+    public const string ModuleVersion = "1.1.0";
+}
+
 // Image must be pinned by digest. PluginCache keeps downloaded providers between runs; the module's
 // lock file pins their hashes, so a changed cache entry is refused by Terraform.
 public sealed record TerraformOptions(string Image, string PluginCache, AzureCredentials Credentials, string DockerPath = "docker")

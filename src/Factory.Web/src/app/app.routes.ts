@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { DeploymentPage } from './deployment.page';
 import { DevelopmentPage } from './development.page';
 import { ProjectPage } from './project.page';
 import { ProjectsPage } from './projects.page';
@@ -13,5 +14,6 @@ export const routes: Routes = [
   { path: 'projects/:id/reviews/:caseId', component: ReviewPage, title: 'Review' },
   { path: 'projects/:id/verifications/:jobId', component: VerificationPage, title: 'Verification' },
   { path: 'projects/:id/developments/:jobId', component: DevelopmentPage, title: 'Development' },
+  { path: 'projects/:id/deployments/:deploymentId', component: DeploymentPage, title: 'Deployment' },
   { path: '**', redirectTo: '' },
 ];

@@ -4,6 +4,7 @@ import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { DeployPanel } from './deployment.page';
 import { DevelopmentStatus, DevelopmentSummary, DevelopmentView, FactoryApi } from './factory-api';
 import { isApplicationName, seconds } from './verification.page';
 import { WorkspaceState } from './workspace.state';
@@ -126,7 +127,7 @@ export class DevelopmentsPanel implements OnInit {
 
 @Component({
   selector: 'app-development-page',
-  imports: [RouterLink, DatePipe, DecimalPipe],
+  imports: [RouterLink, DatePipe, DecimalPipe, DeployPanel],
   template: `
     <p><a routerLink="/">Projects</a> / <a [routerLink]="['/projects', id()]">{{ id() }}</a> / development</p>
     @if (view(); as v) {
@@ -189,6 +190,7 @@ export class DevelopmentsPanel implements OnInit {
           @if (e.finalCommit) { <dt>Commits</dt><dd><code>{{ e.baseCommit }}</code> → <code>{{ e.finalCommit }}</code></dd> }
         </dl>
         <p class="meta">The diff is a proposal for human review: the sandbox proves it builds and its tests pass, not that it is correct.</p>
+        @if (v.job.status === 'verified') { <app-deploy-panel [projectId]="id()" [jobId]="v.job.jobId" /> }
       } @else if (active()) { <p role="status">Waiting for the Developer Agent…</p> }
     } @else if (failed()) { <p class="error" role="alert">The development job could not be loaded.</p> }`,
   styles: `table { width: 100%; border-collapse: collapse; margin-bottom: 12px; } th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); }

@@ -429,8 +429,8 @@ USD 5/month budget (see [Decisions](DECISIONS.md#azure-for-the-m14-pilot-2026-10
 the account had no subscription yet on that date.
 M13A.1 (engine, Azure module app-service-postgres 1.0.0, sandbox release packages, plan/approve/apply
 operator commands) is implemented and the StockFlow release runs on Azure staging (France Central), see
-[Deployment](DEPLOYMENT.md). M13A.2 (durable deployment jobs with
-approval in the Product Workspace) and M13A.3 (Factory-managed hosting path) follow.
+[Deployment](DEPLOYMENT.md). M13A.2 (durable deployments with plan-bound approval in the Product
+Workspace) is implemented and verified live; M13A.3 (Factory-managed hosting path) follows.
 
 ## M15 — SaaS Beta Hardening
 

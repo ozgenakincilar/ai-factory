@@ -19,6 +19,7 @@ public static class DurableWorkflowEndpoints
         builder.Services.AddSingleton<Factory.Core.Tenancy.IWorkspaceDirectory>(store);
         builder.Services.AddSingleton<Factory.Core.Execution.IVerificationJobs>(store);
         builder.Services.AddSingleton<Factory.Core.Development.IDevelopmentJobs>(store);
+        builder.Services.AddSingleton<Factory.Core.Deployment.IDeploymentJobs>(store);
         var policy = Factory.Infrastructure.Security.ModelEndpointPolicy.FromConfiguration(
             builder.Configuration.GetValue<bool>(Factory.Infrastructure.Security.ModelEndpointPolicy.Setting),
             builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Testing"));
@@ -211,6 +212,45 @@ public static class DurableWorkflowEndpoints
                 var bytes = await jobs.GetDevelopmentEvidenceAsync(actor, projectId, jobId, http.RequestAborted);
                 http.Response.Headers.ETag = "\"sha256-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) + "\"";
                 return Results.Bytes(bytes, "application/json; charset=utf-8");
+            }));
+    }
+
+    // M13A.2: deployments of verified development jobs to the project's targets. Approving or rejecting
+    // names the exact plan (binding hash) and requires an Owner/Admin of the project's organization.
+    public static void MapDeployments(this WebApplication app)
+    {
+        var deployments = app.MapGroup("/api/projects/{projectId}/deployments").RequireAuthorization();
+        deployments.MapPost("", (string projectId, HttpContext http, Factory.Core.Deployment.IDeploymentJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var header = http.Request.Headers["Idempotency-Key"];
+                if (header.Count != 1 || !Guid.TryParseExact(header.ToString(), "D", out var key) || key == Guid.Empty)
+                    return Error(400, "invalid_idempotency_key");
+                var fields = await ReadFields(http, ["targetName", "developmentJobId"]);
+                string target; Guid job;
+                try { target = fields["targetName"].GetString()!; job = fields["developmentJobId"].GetGuid(); }
+                catch (Exception ex) when (ex is InvalidOperationException or FormatException) { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
+                if (!System.Text.RegularExpressions.Regex.IsMatch(target, "^[a-z][a-z0-9-]{1,62}[a-z0-9]$")) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+                var submission = await jobs.SubmitDeploymentAsync(actor, projectId, key, target, job, http.RequestAborted);
+                http.Response.Headers.Location = $"/api/projects/{Uri.EscapeDataString(projectId)}/deployments/{submission.DeploymentId:D}";
+                if (submission.Replayed) http.Response.Headers["Idempotency-Replayed"] = "true";
+                return Results.Json(submission, statusCode: 202);
+            }));
+        deployments.MapGet("", (string projectId, HttpContext http, Factory.Core.Deployment.IDeploymentJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await jobs.ListDeploymentsAsync(actor, projectId, http.RequestAborted))));
+        deployments.MapGet("/{deploymentId:guid}", (string projectId, Guid deploymentId, HttpContext http, Factory.Core.Deployment.IDeploymentJobs jobs,
+            FactoryAuthSettings auth)
+            => Run(http, auth, async actor => Results.Json(await jobs.GetDeploymentAsync(actor, projectId, deploymentId, http.RequestAborted))));
+        deployments.MapPost("/{deploymentId:guid}/decision", (string projectId, Guid deploymentId, HttpContext http,
+            Factory.Core.Deployment.IDeploymentJobs jobs, FactoryAuthSettings auth)
+            => Run(http, auth, async actor =>
+            {
+                var fields = await ReadFields(http, ["approve", "bindingSha256", "allowDestructive"]);
+                bool approve, destructive; string binding;
+                try { approve = fields["approve"].GetBoolean(); destructive = fields["allowDestructive"].GetBoolean(); binding = fields["bindingSha256"].GetString()!; }
+                catch (InvalidOperationException) { throw new OrchestrationException(OrchestrationError.InvalidCommand); }
+                if (!System.Text.RegularExpressions.Regex.IsMatch(binding, "^[0-9a-f]{64}$")) throw new OrchestrationException(OrchestrationError.InvalidCommand);
+                return Results.Json(await jobs.DecideDeploymentAsync(actor, projectId, deploymentId, approve, binding, destructive, http.RequestAborted));
             }));
     }
 

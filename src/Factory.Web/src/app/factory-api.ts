@@ -75,6 +75,29 @@ export interface PullRequestOutcome { repository: string; branch: string; status
 export interface DevelopmentView { job: DevelopmentSummary; evidence: DevelopmentEvidence | null; evidenceSha256: string | null; pullRequest?: PullRequestOutcome | null; }
 export interface DevelopmentSubmission { jobId: string; status: DevelopmentStatus; replayed: boolean; }
 
+// Deployments (M13A.2): a verified job's release on one of the project's targets, applied only after an
+// organization Owner/Admin approved the exact plan (its binding SHA-256).
+export type DeploymentStatus = 'queued' | 'planning' | 'awaitingApproval' | 'approved' | 'applying' | 'succeeded' | 'unhealthy' | 'failed'
+  | 'rejected' | 'expired';
+export interface DeploymentTarget { name: string; cloud: string; environment: string; application: string; location: string | null; resourceGroup: string | null; }
+export interface PlannedChange { address: string; type: string; actions: string[]; }
+export interface PlanSummary { add: number; change: number; destroy: number; changes: PlannedChange[]; }
+export interface DeploymentOutcome {
+  bindingSha256: string; url: string | null; outputs: Record<string, string> | null;
+  health: { url: string; healthy: boolean; statusCode: number | null; attempts: number; duration: string } | null;
+  configuration: { resolved: boolean; references: { name: string; status: string }[] } | null;
+  failure: string | null; approvedBy: string | null; approvedAt: string | null;
+}
+export interface DeploymentView {
+  deploymentId: string; targetName: string; developmentJobId: string; status: DeploymentStatus; failureCode: string | null;
+  bindingSha256: string | null; releaseSha256: string | null; moduleId: string | null; moduleVersion: string | null; summary: PlanSummary | null;
+  destructive: boolean | null; plannedAt: string | null; approved: boolean | null; decidedAt: string | null; allowDestructive: boolean | null;
+  url: string | null; result: DeploymentOutcome | null; createdAt: string; updatedAt: string;
+  binding?: Record<string, unknown> | null; planSha256?: string | null;
+}
+export interface DeploymentList { targets: DeploymentTarget[]; deployments: DeploymentView[]; }
+export interface DeploymentSubmission { deploymentId: string; status: DeploymentStatus; replayed: boolean; }
+
 // Review cases (M5B.2 decisions on published artifacts). The ETag is the optimistic-concurrency token.
 export type ReviewState = 'pendingReview' | 'approved' | 'rejected' | 'changesRequested';
 export type ReviewDecision = 'approve' | 'reject' | 'requestChanges';
@@ -175,6 +198,26 @@ export class FactoryApi {
     return this.http.post<DevelopmentSubmission>(`${this.base}/projects/${encodeURIComponent(projectId)}/developments`,
       { caseId, artifactVersion, artifactSha256, templateId: starterTemplate.id, templateVersion: starterTemplate.version, applicationName },
       { headers: new HttpHeaders({ 'Idempotency-Key': idempotencyKey }) });
+  }
+
+  deployments(projectId: string): Observable<DeploymentList> {
+    return this.http.get<DeploymentList>(`${this.base}/projects/${encodeURIComponent(projectId)}/deployments`);
+  }
+
+  deployment(projectId: string, deploymentId: string): Observable<DeploymentView> {
+    return this.http.get<DeploymentView>(`${this.base}/projects/${encodeURIComponent(projectId)}/deployments/${encodeURIComponent(deploymentId)}`);
+  }
+
+  submitDeployment(projectId: string, targetName: string, developmentJobId: string, idempotencyKey: string): Observable<DeploymentSubmission> {
+    return this.http.post<DeploymentSubmission>(`${this.base}/projects/${encodeURIComponent(projectId)}/deployments`,
+      { targetName, developmentJobId }, { headers: new HttpHeaders({ 'Idempotency-Key': idempotencyKey }) });
+  }
+
+  // Names the exact plan the approver saw; another or an expired plan answers 412.
+  decideDeployment(projectId: string, deploymentId: string, approve: boolean, bindingSha256: string, allowDestructive: boolean): Observable<DeploymentView> {
+    return this.http.post<DeploymentView>(
+      `${this.base}/projects/${encodeURIComponent(projectId)}/deployments/${encodeURIComponent(deploymentId)}/decision`,
+      { approve, bindingSha256, allowDestructive });
   }
 
   review(projectId: string, caseId: string): Observable<ReviewCase> {

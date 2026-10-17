@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ConfirmedRequirement, FactoryApi, decompositionVersion, standardVersion } from './factory-api';
+import { DeploymentsPanel } from './deployment.page';
 import { DevelopmentsPanel } from './development.page';
 import { VerificationsPanel } from './verification.page';
 import { WorkspaceState } from './workspace.state';
@@ -21,7 +22,7 @@ export function parseRequirements(text: string): ConfirmedRequirement[] | null {
 
 @Component({
   selector: 'app-project-page',
-  imports: [FormsModule, RouterLink, DatePipe, VerificationsPanel, DevelopmentsPanel],
+  imports: [FormsModule, RouterLink, DatePipe, VerificationsPanel, DevelopmentsPanel, DeploymentsPanel],
   template: `
     <p><a routerLink="/">Projects</a> / {{ id() }}</p>
     <h1>{{ id() }}</h1>
@@ -43,6 +44,7 @@ export function parseRequirements(text: string): ConfirmedRequirement[] | null {
       </form>
     </section>
     <app-developments-panel [projectId]="id()" />
+    <app-deployments-panel [projectId]="id()" />
     <app-verifications-panel [projectId]="id()" />
     <h2>Runs</h2>
     @if (state.runs().length === 0) { <p>No runs yet.</p> }

@@ -142,5 +142,27 @@ if (builder.Configuration.GetValue<bool>("Development:Enabled"))
     }
 }
 
+// M13A.2 deployments (opt-in): plans and applies approved deployments with the deployment identity of
+// the configured target (Azure:* in User Secrets, scripts/Initialize-AzureStaging.ps1). Plans are
+// applied only after an organization Owner/Admin approved their exact binding.
+if (builder.Configuration.GetValue<bool>("Deployment:Enabled"))
+{
+    string Required(string key) => builder.Configuration[key] is { Length: > 0 } value ? value
+        : throw new InvalidOperationException($"Deployment needs {key}.");
+    var credentials = new Factory.Infrastructure.Deployment.AzureCredentials(Required("Azure:TenantId"), Required("Azure:SubscriptionId"),
+        Required("Azure:ClientId"), Required("Azure:ClientSecret"));
+    var modules = new Factory.Infrastructure.Deployment.FileSystemModuleCatalog(Required("Deployment:ModulesRoot"));
+    var http = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+    builder.Services.AddSingleton(new Factory.Orchestration.Deployment.DeploymentProcessor(new PostgresOrchestrationStore(connection),
+        new Factory.Infrastructure.Templates.FileSystemTemplateCatalog(Required("Templates:Root")), modules,
+        new Factory.Infrastructure.Deployment.SandboxReleaseBuilder(new Factory.Infrastructure.Execution.DockerSandboxOptions(Required("Verification:RunnerImage"),
+            Factory.Core.Execution.SandboxLimits.Default)),
+        new Factory.Infrastructure.Deployment.TerraformDeploymentEngine(new Factory.Infrastructure.Deployment.TerraformOptions(
+            Factory.Infrastructure.Deployment.DeploymentDefaults.TerraformImage, Required("Deployment:PluginCache"), credentials), modules),
+        new Factory.Infrastructure.Deployment.HttpHealthChecker(http), new Factory.Infrastructure.Deployment.AzureConfigurationChecker(http, credentials),
+        Factory.Infrastructure.Deployment.DeploymentDefaults.ModuleId, Factory.Infrastructure.Deployment.DeploymentDefaults.ModuleVersion));
+    builder.Services.AddHostedService<DeploymentWorkerService>();
+}
+
 await builder.Build().RunAsync();
 return 0;

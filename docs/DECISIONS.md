@@ -373,6 +373,21 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M13A.2 durable deployments (2026-10-17, delegated)
+
+Taken under the user's full approval ("et", "tam onayıma sahipsin"); open to review.
+
+- **Approval authority**: Owners/Admins of the project's organization (as for run decisions); Generators
+  request. The decision names the binding hash; approvals expire after 24 hours.
+- **Release not stored**: the deterministic rebuild must reproduce the planned release hash (verified
+  live: identical across three builds), so the database holds plans (at most 4 MB) but no packages.
+- **Secret references are part of release health** after M13A.1's finding.
+- **Targets are registered by the operator** with the owner login and bound to one project; credentials
+  stay worker configuration.
+- **The human click stays human**: the agent's permission policy refused both running the role-granting
+  bootstrap and clicking Approve; the user did both. The acceptance script approves only a binding the
+  human named and that the page shows.
+
 ## M13A.1 Azure staging design (2026-10-17, delegated)
 
 Taken under the user's delegated authority ("tam onayım var") after the user reported and the agent

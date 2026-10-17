@@ -5,8 +5,8 @@ operator commands). The StockFlow release of ozgenakincilar/stockflow#1 runs on 
 https://stock-flow-staging-9b228545.azurewebsites.net (France Central), deployed through two
 human-approved plans. The bootstrap (`scripts/Initialize-AzureStaging.ps1`) was run by the user: the
 agent's permission policy does not allow it to grant cloud roles.
-Durable deployment jobs with approval in the Product Workspace are **M13A.2**; the Factory-managed hosting
-path is **M13A.3**.
+**M13A.2 implemented and live** on 2026-10-17: durable deployments with approval in the Product Workspace
+(see below). The Factory-managed hosting path is **M13A.3**.
 
 ## Target and cost (user decisions: own subscription, France Central, USD 5/month)
 
@@ -126,6 +126,67 @@ keep the free-account services (user decision when it comes to that).
    200 on the first attempt; the Key Vault reference status is **Resolved** (user-assigned identity).
    Both `apply-*.json` evidence files hold binding, approval, URL and health, and no credentials.
 
+## M13A.2 — durable deployments
+
+- **Targets** (`orchestration."DeploymentTargets"`, migration `20261017130000_Deployments`): registered by
+  the operator with the owner login (`scripts/Register-DeploymentTarget.ps1`), bound to exactly one
+  project, immutable; the descriptor is the non-secret target (no credentials). A project can deploy
+  only to its own targets (wrong-target denial in the database).
+- **Deployments** (`orchestration."Deployments"`): `Queued → Planning → AwaitingApproval → Approved →
+  Applying → Succeeded | Unhealthy | Failed`, or `Rejected` / `Expired`. A trigger enforces the
+  transitions and keeps identity, target, job, the recorded plan (bytes, hash, binding, summary,
+  release hash) and the decision immutable; rows are never deleted. One active deployment per target.
+- **Who**: project Generators request deployments of the project's *verified* development jobs; only an
+  active **Owner/Admin of the project's organization** approves or rejects, naming the exact binding
+  hash; destructive plans need `allowDestructive`; approvals expire 24 hours after planning (reads
+  record the expiry, because a refused decision rolls back its own update).
+- **Worker** (`DeploymentProcessor`, `scripts/Run-FactoryWorker.ps1 -Verification -Deployment`): the plan
+  phase checks the evidence (this job, this project, Verified), regenerates the hash-verified template,
+  builds the release in the sandbox and plans with module 1.1.0; `record_deployment_plan` re-checks that
+  the binding names this job, these plan bytes, this release and module. The apply phase rebuilds the
+  release from the same evidence (it is not stored) and requires the planned release hash, applies
+  exactly the stored plan with the recorded approval, then verifies `/health` and the **Key Vault
+  reference status** through read-only ARM calls (`AzureConfigurationChecker`): unresolved references
+  make the deployment `Unhealthy` (`configuration_unresolved`). A lost lease ends the deployment as
+  `worker_lost`; nothing is re-applied without a new plan and approval.
+- **API**: `GET/POST /api/projects/{id}/deployments` (Idempotency-Key), `GET .../{deploymentId}`,
+  `POST .../{deploymentId}/decision` `{approve, bindingSha256, allowDestructive}` (412 for another or an
+  expired plan, 403 for non-admins).
+- **Product Workspace**: a Deploy panel on verified development jobs, a Deployments list on the project
+  page, and a deployment page with the planned changes, hashes, a destructive-change acknowledgement,
+  Approve/Reject, and the health and secret-reference results; only `https://<name>.azurewebsites.net`
+  addresses are rendered as links.
+
+## Executed verification M13A.2 — 2026-10-17
+
+1. Unit tests: configuration checker (client-credentials token request, read-only ARM URL, cold-start
+   retry, denied references reported, unexpected site names refused, reference values never kept).
+2. PostgreSQL tests (fresh database `factory_m13a2_verify_20261017`): other projects' targets and unknown
+   jobs not found, other projects' actors forbidden, idempotent submission, one active deployment per
+   target; a plan is recorded only for this job, these plan bytes and this release; only the
+   organization Owner/Admin decides, only on the current binding; destructive plans need the flag;
+   approvals expire after 24 hours; a lost applying worker ends the deployment; terminal rows and
+   targets are immutable; runtime and worker roles reach only their own functions.
+3. Processor tests with fakes: plan, nothing applied before approval, approved apply → Succeeded;
+   unresolved secret references → Unhealthy; a rebuild that does not reproduce the planned release →
+   Failed `release_mismatch` before apply. HTTP tests: strict bodies, Idempotency-Key, 412 on another
+   binding, approval through the endpoint.
+4. Web: 30 unit tests (7 new: safe links, exact-binding approval, destructive acknowledgement, stale-plan
+   message, results, Deploy panel, Deployments list); production build clean.
+5. **Live acceptance** (workspace database migrated, target `stock-flow-staging` registered for
+   `factory-workspace`; API, web and worker `-Verification -Deployment`): in headless Edge the verified
+   StockFlow job of stockflow#1 was deployed from its Deploy panel → deployment
+   `a9859215-f326-4254-868a-7067015a57ce`, plan **0 to add, 0 to change, 0 to destroy** (the live
+   infrastructure already matched module 1.1.0 and the release), release `99d27dd2…` identical to the
+   M13A.1 builds, binding `2123d2b576080bc5f5d20f14e262675ea70705fca47aeb77df51aa31e932cfcb`. The agent's
+   attempt to click Approve was refused by its permission policy ("Production Deploy"); **the user
+   approved in the browser**. The worker applied the plan: **Succeeded**, health 200, Key Vault reference
+   **Resolved**, approver recorded, `AllowDestructive` false; Azure still has the same five resources.
+   Worker and API logs: no errors and no occurrence of the deployment secret.
+6. Full suite with `-IncludeKeycloak -IncludeDocker` on `factory_m13a2_verify_20261017`: Keycloak pass
+   **4 passed**, remaining pass **1034 passed, 0 failed, 1 skipped** (the paid live Developer Agent test);
+   `LifecycleMigrationTests` expects 21 migrations.
+
 ## Limits
 
 - The free App Service plan has no virtual network integration, so the database firewall allows
@@ -139,7 +200,13 @@ keep the free-account services (user decision when it comes to that).
 - Terraform containers have unrestricted outbound network access (Azure and the provider registry).
 - The starter template and StockFlow have no EF migrations and no static web hosting yet: the
   deployment serves the API and `/health`; the Angular app and database schema creation are M14 work.
-- The health check does not cover configuration: a database-backed health endpoint (M14) and a Key Vault
-  reference status check in the deployment verification (M13A.2) are still missing.
+- The health check does not touch the database; a database-backed health endpoint is M14 work. M13A.2
+  checks the Key Vault reference status.
+- One deployment identity per worker (User Secrets): targets of other subscriptions are refused
+  (`target_not_configured`) until per-target credentials exist (M15).
+- Signing in on a deep link (for example a deployment page) lands on the project list; the link must be
+  opened again.
+- A worker killed during apply leaves Terraform's state lock and possibly partial changes; the next plan
+  shows them, and a held lock needs `terraform force-unlock` by the operator.
 - No automatic rollback: a failed apply leaves Terraform's partial state; a new plan reconciles it.
   Deleting the target is a manual, explicitly authorized operation.

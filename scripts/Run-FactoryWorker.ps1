@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Database, [ValidateRange(1,8)][int]$Concurrency = 1, [ValidateSet('openai','anthropic')][string]$Provider = 'openai', [switch]$Verification, [switch]$Development, [string]$StrongModel = '', [string]$GitHubRepository = '')
+param([Parameter(Mandatory)][string]$Database, [ValidateRange(1,8)][int]$Concurrency = 1, [ValidateSet('openai','anthropic')][string]$Provider = 'openai', [switch]$Verification, [switch]$Development, [string]$StrongModel = '', [string]$GitHubRepository = '', [switch]$Deployment)
 $ErrorActionPreference='Stop'
 # Local development worker against a dedicated, initialized M7 database. Never the owner login.
 if($Database -cnotmatch '\Afactory_[A-Za-z0-9_]+\z' -or $Database -eq 'factory_review_5a'){throw 'Invalid isolated database name.'}
@@ -46,6 +46,15 @@ if($GitHubRepository){
     if(-not $Development){throw 'Pull requests need -Development.'}
     if($GitHubRepository -cnotmatch '\A[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}\z'){throw 'Invalid repository.'}
     $values['GitHub__Repository']=$GitHubRepository
+}
+# -Deployment also plans and applies approved deployments (M13A.2) with the deployment identity in the
+# worker User Secrets (Azure:*, scripts/Initialize-AzureStaging.ps1); targets are registered per project
+# with scripts/Register-DeploymentTarget.ps1. Infrastructure changes only after an Owner/Admin approval.
+if($Deployment){
+    if(-not $Verification){throw 'Deployment needs -Verification (template root and runner image).'}
+    $values['Deployment__Enabled']='true'
+    $values['Deployment__ModulesRoot']="$repo/deploy"
+    $values['Deployment__PluginCache']="$repo/artifacts/terraform/plugin-cache"
 }
 $saved=@{}
 try {
