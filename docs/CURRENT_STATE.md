@@ -64,8 +64,9 @@ token entered by the user, the Factory never merges. M11.1 (Factory-established 
 architecture tests from the TRX report, layer scan, protected files; advisory coverage and tests) and
 M11.2 (correction loop, at most 2) are committed as db9e00c. M11.3 (pull requests of verified,
 evidence-matching commits; never merges) is verified with 1004 passed against a local bare repository and
-a fake API; the live GitHub run awaits a token that includes `ozgenakincilar/stockflow` (the supplied one
-returns 404 for it); see [Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md).
+a fake API, and live: a new StockFlow Product CRUD development job was verified (USD 0.0542, one
+correction) and opened https://github.com/ozgenakincilar/stockflow/pull/1 with commits equal to the
+evidence; it awaits human review (the Factory never merges); see [Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md).
 
 ## Milestone 8.1 current handoff
 
@@ -282,7 +283,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 10.2 | Committed/pushed Developer Agent loop, a667e3c (977 passed), see DEVELOPER_AGENT.md |
 | 10.3 | Committed/pushed development jobs, evidence, Develop UI, 8846c67 (986 passed), see DEVELOPER_AGENT.md |
 | 11.1–11.2 | Committed/pushed verification checks and correction loop, db9e00c (992 passed), see VERIFICATION_AND_PULL_REQUESTS.md |
-| 11.3 | Pull request publisher and outcomes (1004 passed; live GitHub run pending token access), see VERIFICATION_AND_PULL_REQUESTS.md |
+| 11.3 | Committed/pushed pull request publisher, 7ea0d6b (1004 passed); live PR stockflow#1 opened, see VERIFICATION_AND_PULL_REQUESTS.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

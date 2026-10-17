@@ -1,8 +1,8 @@
 # M11 — Verification Agent & GitHub Pull Request
 
 Status: **M11.1, M11.2 and M11.3 implemented** on 2026-10-17 (Factory-established verification checks, a
-bounded correction loop, and pull requests of verified, evidence-matching commits). The live GitHub run
-is pending: the supplied token does not yet include the target repository; decisions: [Decisions](DECISIONS.md#m11-github-target-credential-and-merge-policy-2026-10-17-user-decision).
+bounded correction loop, and pull requests of verified, evidence-matching commits). The first live pull
+request, ozgenakincilar/stockflow#1, was opened on 2026-10-17; decisions: [Decisions](DECISIONS.md#m11-github-target-credential-and-merge-policy-2026-10-17-user-decision).
 
 ## M11.1 — verified results versus agent claims
 
@@ -97,10 +97,26 @@ correction runs under the same job cost cap; nothing is retried outside these bo
    `8000e410dc7cc8c79a99db45cd6b0301c6ad0c044da8a4cb5bf2a9f2af6010af`) and
    `artifacts/m6-tests/Özgen_DESKTOP-TQO89E0_2026-10-17_01_41_20.trx` (SHA-256
    `d663ee59f64306ecfa9a2ac9cce2cb2c1a554c6245f21dc2a2763406983f778a`).
-5. **Live GitHub run: not yet possible.** The token the user supplied (pasted in chat on 2026-10-17 and
-   stored in the worker User Secrets at the user's request) is valid but does not include the `stockflow`
-   repository: GitHub answers 404 and reports `metadata=read` and `pull_requests=read` as missing. The
-   user was asked to add the repository and Contents/Pull requests write permissions to the token.
+5. **Live GitHub runs** (tokens pasted in chat by the user and stored in the worker User Secrets at the
+   user's request):
+   - First token: valid but without the `stockflow` repository (404; `metadata=read`, `pull_requests=read`
+     reported missing). Second token: could read but not write (`git push` 403 "Write access to
+     repository not granted"); the verified CRUD job of M10.3 therefore has an immutable `Failed`
+     (`push_failed`) outcome after three transient attempts. The worker now logs the failure code.
+   - Third token (Contents and Pull requests read/write, only `stockflow`): a throwaway `factory/` push
+     confirmed write access. Because the repository was still empty, that branch became the default
+     branch and could not be deleted with the token; after the publish the operator set the default
+     branch to `main` and deleted it with the user's own gh session (the Factory does not use it).
+   - Acceptance run: StockFlow Product CRUD again through the browser (analysis, approval, Develop) →
+     **Verified** in 7 turns and 44 actions, **USD 0.0542**, one correction after failed Factory checks
+     (M11.2 used live); all Factory checks passed (8 of 8 tests including the architecture tests). The
+     worker then opened **https://github.com/ozgenakincilar/stockflow/pull/1**: `main` holds the base
+     commit `8bc5b47a662bf4a27ad557a5ded1292af219b119` (the same id the sandbox computed), the branch
+     `factory/stock-flow-a95050d49fd2` the final commit `1bd942e040b09ac27b062c9326ac10b1b2a10137` equal to the
+     evidence; 9 files, +234/-4; the body carries the traceability table, Factory checks and hashes. The
+     pull request is open and not merged. Worker and API logs: no errors, no token-like strings.
+   - Operational finding: starting the API and the worker at the same moment made both `dotnet run`
+     builds write the same intermediate files and the worker exited; start them one after the other.
 
 ## Limits
 

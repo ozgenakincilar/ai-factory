@@ -357,7 +357,7 @@ sandbox and evidence.
 ## M11 — Verification Agent & GitHub Pull Request
 
 Status: **implemented** as M11.1–M11.3 (see [Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md));
-the live pull request run awaits a token that includes the target repository. Priority: **P0**. Estimated effort: **2–3 weeks**.
+the first live pull request (StockFlow Product CRUD, ozgenakincilar/stockflow#1) was opened and awaits human review. Priority: **P0**. Estimated effort: **2–3 weeks**.
 
 Goal: Produce evidence-backed Pull Requests rather than relying on AI completion claims.
 
