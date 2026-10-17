@@ -138,14 +138,17 @@ public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
     private Task<ProcessResult> Docker(IEnumerable<string> arguments, byte[]? input, TimeSpan timeout, CancellationToken cancellationToken)
         => Docker(_options, arguments, input, timeout, cancellationToken);
 
+    // environment: variables for the docker client process only; `docker run -e NAME` (without a value)
+    // forwards them into a container, so secrets never appear on a command line.
     internal static async Task<ProcessResult> Docker(DockerSandboxOptions options, IEnumerable<string> arguments, byte[]? input, TimeSpan timeout,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? environment = null)
     {
         var start = new ProcessStartInfo(options.DockerPath)
         {
             RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = input is not null, UseShellExecute = false,
         };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        if (environment is not null) foreach (var (key, value) in environment) start.Environment[key] = value;
         using var process = Process.Start(start) ?? throw new InvalidOperationException("docker_not_started");
         var output = new BoundedOutput(options.Limits.OutputBytes);
         var stdout = Pump(process.StandardOutput.BaseStream, output);
@@ -168,6 +171,40 @@ public sealed class DockerSandbox(DockerSandboxOptions options) : ISandbox
         }
         await Task.WhenAll(stdout, stderr);
         return new(timedOut ? -1 : process.ExitCode, timedOut, output.Text(), output.Truncated);
+    }
+
+    // Standard output as bytes (for archives), refused beyond maxBytes; standard error is bounded text.
+    internal static async Task<(int Exit, byte[] Output, string Error)> DockerBytes(DockerSandboxOptions options, IEnumerable<string> arguments,
+        long maxBytes, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var start = new ProcessStartInfo(options.DockerPath) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("docker_not_started");
+        var error = new BoundedOutput(options.Limits.OutputBytes);
+        var stderr = Pump(process.StandardError.BaseStream, error);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        using var buffer = new MemoryStream();
+        try
+        {
+            var chunk = new byte[81920];
+            int read;
+            while ((read = await process.StandardOutput.BaseStream.ReadAsync(chunk, deadline.Token)) > 0)
+            {
+                if (buffer.Length + read > maxBytes) throw new SandboxUnavailableException("output_too_large");
+                buffer.Write(chunk, 0, read);
+            }
+            await process.WaitForExitAsync(deadline.Token);
+        }
+        catch (Exception e) when (e is OperationCanceledException or SandboxUnavailableException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            await process.WaitForExitAsync(CancellationToken.None);
+            if (cancellationToken.IsCancellationRequested) throw;
+            throw e as SandboxUnavailableException ?? new SandboxUnavailableException("export_timeout");
+        }
+        await stderr;
+        return (process.ExitCode, buffer.ToArray(), error.Text());
     }
 
     private static async Task Pump(Stream stream, BoundedOutput output)

@@ -373,6 +373,29 @@ Taken under the same delegated authority; open to the user's review.
   dependencies; Application on Domain only; Infrastructure implements Application ports; Api is the
   composition root).
 
+## M13A.1 Azure staging design (2026-10-17, delegated)
+
+Taken under the user's delegated authority ("tam onayım var") after the user reported and the agent
+verified the subscription (Free Trial, spending limit on, West Europe available); open to review.
+
+- **Within USD 5/month**: App Service **F1** (free) for the .NET 10 API instead of Container Apps (which
+  would need a paid container registry), PostgreSQL flexible server **B1MS** (free for 12 months on a free
+  account), Key Vault and state storage (cents). A subscription-wide budget alerts at 80 % actual and
+  100 % forecast to the user's e-mail.
+- **Terraform 1.16.5, azurerm 5.8.0, random 3.9.1**, each at least two weeks old, pinned by image digest,
+  exact versions and a provider lock file; the module is versioned with a content hash like templates.
+- **Identity**: the operator bootstrap (user's own `az login`) creates a service principal with
+  Contributor on the target resource group and Storage Blob Data Contributor on that target's state
+  container only; client secret valid 30 days. Granting roles is done by the user: the agent's permission
+  policy refused to run the bootstrap. Federated, short-lived credentials wait for a hosted runner (M15).
+- **No secret in state or plan**: write-only database password; Key Vault reference for the connection
+  string; Entra-only state access (shared keys disabled).
+- **Approval binding** over the plan bytes, target, module, release and inputs; destructive plans need an
+  explicit destructive approval; the approval step is a separate human command in M13A.1 and becomes a
+  Product Workspace decision in M13A.2.
+- **Scope cut**: the API and its health endpoint are deployed; the Angular app and database migrations
+  are M14 work (neither the template nor StockFlow has them yet).
+
 ## M11 GitHub target, credential and merge policy (2026-10-17, user decision)
 
 - Pull requests go to a **new private repository `ozgenakincilar/stockflow`** (created empty on
@@ -450,6 +473,9 @@ Taken under the user's delegated authority after the confirmations above; open t
 - Prerequisite found on 2026-10-16: Azure CLI 2.91.0 was installed and `az login` succeeded, but the
   account has **no Azure subscription**. No Azure resources exist and none were created. A
   subscription must exist before any M13A/M14 work touches Azure.
+- 2026-10-17: the user reported a subscription with USD 200 credit; after `az login` it was inspected
+  read-only: "Azure subscription 1", offer Free Trial (`FreeTrial_2014-09-01`), spending limit on,
+  enabled, empty. The user then gave full approval for M13A ("tam onayım var").
 
 ## Review page — M12b (2026-10-16, delegated)
 

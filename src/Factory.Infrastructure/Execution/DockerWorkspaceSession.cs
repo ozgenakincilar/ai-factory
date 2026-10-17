@@ -77,6 +77,16 @@ public sealed class DockerWorkspaceSession : IWorkspaceSession
         return new(step.Name, run.Exit == 0 ? StepOutcome.Passed : StepOutcome.Failed, run.Exit, clock.Elapsed, run.Output, run.Truncated);
     }
 
+    // M13A: the files below an absolute directory in the container as a tar stream. The content is
+    // untrusted (built by workspace code); callers must validate every entry.
+    public async Task<byte[]> ExportAsync(string directory, long maxBytes, CancellationToken cancellationToken = default)
+    {
+        Ready();
+        var (exit, output, _) = await DockerSandbox.DockerBytes(_options, ["exec", _name, "tar", "-c", "-C", directory, "."], maxBytes,
+            _options.Limits.StepTimeout, cancellationToken);
+        return exit == 0 ? output : throw new SandboxUnavailableException("workspace_export_failed");
+    }
+
     private void Ready(string? path = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -111,7 +121,7 @@ public sealed class GitWorkspaceDiffer(DockerSandboxOptions options) : IWorkspac
 public static class GitSnapshot
 {
     public const int MaxDiffBytes = 4 * 1024 * 1024;
-    private static readonly string[] Git =
+    internal static readonly string[] Git =
     [
         "env", "HOME=/tmp", "GIT_CONFIG_NOSYSTEM=1", "GIT_AUTHOR_NAME=Universal AI Factory", "GIT_AUTHOR_EMAIL=factory@localhost",
         "GIT_COMMITTER_NAME=Universal AI Factory", "GIT_COMMITTER_EMAIL=factory@localhost",

@@ -1,0 +1,2 @@
+# Module bytes are hashed; keep LF on every platform.
+* text eol=lf

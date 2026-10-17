@@ -11,6 +11,9 @@ using OpenAI.Chat;
 // Standard precedence (highest first): command line, environment, Development User Secrets, JSON.
 var builder = Host.CreateApplicationBuilder(args);
 
+// M13A.1 operator deployment commands; they need no database or model provider.
+if (args is ["deploy", _, ..]) return await DeployCommand.RunAsync(args[1..], builder.Configuration);
+
 var connection = builder.Configuration.GetConnectionString("Orchestration");
 if (string.IsNullOrWhiteSpace(connection))
     throw new InvalidOperationException("ConnectionStrings:Orchestration is not configured; use the restricted worker role.");
@@ -139,4 +142,5 @@ if (builder.Configuration.GetValue<bool>("Development:Enabled"))
     }
 }
 
-builder.Build().Run();
+await builder.Build().RunAsync();
+return 0;

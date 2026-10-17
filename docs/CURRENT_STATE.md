@@ -67,6 +67,12 @@ evidence-matching commits; never merges) is verified with 1004 passed against a 
 a fake API, and live: a new StockFlow Product CRUD development job was verified (USD 0.0542, one
 correction) and opened https://github.com/ozgenakincilar/stockflow/pull/1 with commits equal to the
 evidence; it awaits human review (the Factory never merges); see [Verification and Pull Requests](VERIFICATION_AND_PULL_REQUESTS.md).
+The user's Azure free-trial subscription was verified on 2026-10-17 and M13A was fully approved. M13A.1
+(Terraform deployment engine behind `IDeploymentEngine`, module `deploy/azure/app-service-postgres`
+1.0.0 within the USD 5/month budget, release packages rebuilt from evidence commits in the sandbox,
+plan-binding approval, `scripts/Deploy-FactoryStaging.ps1`) is implemented; the live staging deployment
+needs `scripts/Initialize-AzureStaging.ps1`, which the user must run (it grants Azure roles); see
+[Deployment](DEPLOYMENT.md).
 
 ## Milestone 8.1 current handoff
 
@@ -284,6 +290,7 @@ usage; IAgent/IModelProvider signatures are unchanged. 5A adds pinned EF Core 10
 | 10.3 | Committed/pushed development jobs, evidence, Develop UI, 8846c67 (986 passed), see DEVELOPER_AGENT.md |
 | 11.1–11.2 | Committed/pushed verification checks and correction loop, db9e00c (992 passed), see VERIFICATION_AND_PULL_REQUESTS.md |
 | 11.3 | Committed/pushed pull request publisher, 7ea0d6b (1004 passed); live PR stockflow#1 opened, see VERIFICATION_AND_PULL_REQUESTS.md |
+| 13A.1 | Deployment engine, Azure module, sandbox release packages, operator plan/approve/apply; live Azure run waits for the user-run bootstrap, see DEPLOYMENT.md |
 
 StockFlow is the first planned end-to-end pilot; it is not an implemented product or Factory
 dependency. No implementation/test/review agent,

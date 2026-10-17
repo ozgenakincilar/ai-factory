@@ -1,0 +1,10 @@
+{
+  "modules": [
+    {
+      "id": "azure-app-service-postgres",
+      "version": "1.0.0",
+      "directory": "azure/app-service-postgres",
+      "contentSha256": "83c4e069946d4968e82f16e9154f65bc1932894d68de610b6850794203e2ef02"
+    }
+  ]
+}

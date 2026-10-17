@@ -427,6 +427,10 @@ selected during pilot planning; this document does not extend StockFlow's suppli
 User decision of 2026-10-16: the pilot uses the user's own Azure subscription in West Europe with a
 USD 5/month budget (see [Decisions](DECISIONS.md#azure-for-the-m14-pilot-2026-10-16-user-decision));
 the account had no subscription yet on that date.
+M13A.1 (engine, Azure module app-service-postgres 1.0.0, sandbox release packages, plan/approve/apply
+operator commands) is implemented, see [Deployment](DEPLOYMENT.md); the first live staging deployment
+waits for the user-run bootstrap of the deployment identity. M13A.2 (durable deployment jobs with
+approval in the Product Workspace) and M13A.3 (Factory-managed hosting path) follow.
 
 ## M15 — SaaS Beta Hardening
 
