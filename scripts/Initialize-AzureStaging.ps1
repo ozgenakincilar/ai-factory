@@ -18,21 +18,22 @@ $ErrorActionPreference='Stop'
 # Re-running is safe: existing resources are kept; the secret is replaced.
 # Windows PowerShell 5.1 turns any stderr line of a native command (az prints warnings there) into an
 # error that 'Stop' would make fatal, so success is judged by the exit code alone. AzTry tolerates failure.
+$azCli=(Get-Command az -CommandType Application | Select-Object -First 1).Source
 function AzTry {
     $previous=$ErrorActionPreference; $ErrorActionPreference='Continue'
-    try { $out = & az @args 2>$null; [pscustomobject]@{Exit=$LASTEXITCODE; Out=$out} } finally { $ErrorActionPreference=$previous }
+    try { $out = & $azCli @args 2>$null; [pscustomobject]@{Exit=$LASTEXITCODE; Out=$out} } finally { $ErrorActionPreference=$previous }
 }
-function Az {
+function Invoke-AzCli {
     $previous=$ErrorActionPreference; $ErrorActionPreference='Continue'
     $errors=New-TemporaryFile
     try {
-        $out = & az @args 2>$errors
+        $out = & $azCli @args 2>$errors
         if($LASTEXITCODE){ Get-Content $errors | Where-Object { $_ -notmatch '^WARNING' } | Write-Host; throw "az $($args[0]) $($args[1]) failed" }
         $out
     } finally { $ErrorActionPreference=$previous; Remove-Item $errors }
 }
 $repo=[IO.Path]::GetFullPath("$PSScriptRoot/..")
-$account = Az account show -o json | ConvertFrom-Json
+$account = Invoke-AzCli account show -o json | ConvertFrom-Json
 $subscription=$account.id; $tenant=$account.tenantId
 $hash=([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes("$subscription/$Application/staging"))) -replace '-','').ToLowerInvariant()
 $suffix=$hash.Substring(0,8)
@@ -44,29 +45,29 @@ $identityName="factory-deploy-$Application-staging"
 
 Write-Host "Subscription $($account.name) ($subscription), target $targetGroup in $Location"
 foreach($ns in 'Microsoft.Web','Microsoft.DBforPostgreSQL','Microsoft.KeyVault','Microsoft.Storage'){
-    Az provider register --namespace $ns --wait | Out-Null
+    Invoke-AzCli provider register --namespace $ns --wait | Out-Null
 }
-Az group create --name $targetGroup --location $Location --tags factory-application=$Application factory-environment=staging -o none
-Az group create --name $stateGroup --location $Location --tags factory-purpose=terraform-state -o none
+Invoke-AzCli group create --name $targetGroup --location $Location --tags factory-application=$Application factory-environment=staging -o none
+Invoke-AzCli group create --name $stateGroup --location $Location --tags factory-purpose=terraform-state -o none
 if((AzTry storage account show --name $stateAccount --resource-group $stateGroup --query name -o tsv).Exit){
-    Az storage account create --name $stateAccount --resource-group $stateGroup --location $Location --sku Standard_LRS --kind StorageV2 `
+    Invoke-AzCli storage account create --name $stateAccount --resource-group $stateGroup --location $Location --sku Standard_LRS --kind StorageV2 `
         --min-tls-version TLS1_2 --allow-blob-public-access false --allow-shared-key-access false --https-only true -o none
 }
-Az storage account blob-service-properties update --account-name $stateAccount --resource-group $stateGroup `
+Invoke-AzCli storage account blob-service-properties update --account-name $stateAccount --resource-group $stateGroup `
     --enable-versioning true --enable-delete-retention true --delete-retention-days 14 -o none
 # Created through the management plane: the operator needs no data-plane role.
-if((Az storage container-rm exists --storage-account $stateAccount --resource-group $stateGroup --name $container --query exists -o tsv) -ne 'true'){
-    Az storage container-rm create --storage-account $stateAccount --resource-group $stateGroup --name $container --public-access off -o none
+if((Invoke-AzCli storage container-rm exists --storage-account $stateAccount --resource-group $stateGroup --name $container --query exists -o tsv) -ne 'true'){
+    Invoke-AzCli storage container-rm create --storage-account $stateAccount --resource-group $stateGroup --name $container --public-access off -o none
 }
-$containerScope = "$(Az storage account show --name $stateAccount --resource-group $stateGroup --query id -o tsv)/blobServices/default/containers/$container"
-$groupScope = Az group show --name $targetGroup --query id -o tsv
+$containerScope = "$(Invoke-AzCli storage account show --name $stateAccount --resource-group $stateGroup --query id -o tsv)/blobServices/default/containers/$container"
+$groupScope = Invoke-AzCli group show --name $targetGroup --query id -o tsv
 
-$appId = Az ad app list --display-name $identityName --query '[0].appId' -o tsv
-if(-not $appId){ $appId = Az ad app create --display-name $identityName --sign-in-audience AzureADMyOrg --query appId -o tsv }
-$principal = Az ad sp list --filter "appId eq '$appId'" --query '[0].id' -o tsv
-if(-not $principal){ $principal = Az ad sp create --id $appId --query id -o tsv }
+$appId = Invoke-AzCli ad app list --display-name $identityName --query '[0].appId' -o tsv
+if(-not $appId){ $appId = Invoke-AzCli ad app create --display-name $identityName --sign-in-audience AzureADMyOrg --query appId -o tsv }
+$principal = Invoke-AzCli ad sp list --filter "appId eq '$appId'" --query '[0].id' -o tsv
+if(-not $principal){ $principal = Invoke-AzCli ad sp create --id $appId --query id -o tsv }
 foreach($assignment in @(@('Contributor',$groupScope),@('Storage Blob Data Contributor',$containerScope))){
-    $existing = Az role assignment list --assignee $principal --role $assignment[0] --scope $assignment[1] --query 'length(@)' -o tsv
+    $existing = Invoke-AzCli role assignment list --assignee $principal --role $assignment[0] --scope $assignment[1] --query 'length(@)' -o tsv
     if($existing -eq '0'){
         # A new service principal can take a short while to replicate.
         for($i=0;;$i++){
@@ -75,7 +76,7 @@ foreach($assignment in @(@('Contributor',$groupScope),@('Storage Blob Data Contr
     }
 }
 $end=(Get-Date).ToUniversalTime().AddDays($SecretDays).ToString('yyyy-MM-ddTHH:mm:ssZ')
-$secret = Az ad app credential reset --id $appId --display-name 'factory-worker' --end-date $end --query password -o tsv
+$secret = Invoke-AzCli ad app credential reset --id $appId --display-name 'factory-worker' --end-date $end --query password -o tsv
 try {
     # Through standard input, so the secret never appears on a command line.
     @{'Azure:TenantId'=$tenant;'Azure:SubscriptionId'=$subscription;'Azure:ClientId'=$appId;'Azure:ClientSecret'=$secret} | ConvertTo-Json -Compress |
