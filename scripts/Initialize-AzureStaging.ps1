@@ -47,7 +47,7 @@ $container="tfstate-$Application-staging"
 $identityName="factory-deploy-$Application-staging"
 
 Write-Host "Subscription $($account.name) ($subscription), target $targetGroup in $Location"
-foreach($ns in 'Microsoft.Web','Microsoft.DBforPostgreSQL','Microsoft.KeyVault','Microsoft.Storage'){
+foreach($ns in 'Microsoft.Web','Microsoft.DBforPostgreSQL','Microsoft.KeyVault','Microsoft.Storage','Microsoft.ManagedIdentity'){
     Invoke-AzCli provider register --namespace $ns --wait | Out-Null
 }
 Invoke-AzCli group create --name $targetGroup --location $Location --tags factory-application=$Application factory-environment=staging -o none

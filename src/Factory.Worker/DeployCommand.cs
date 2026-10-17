@@ -18,7 +18,7 @@ namespace Factory.Worker;
 internal static class DeployCommand
 {
     private const string ModuleId = "azure-app-service-postgres";
-    private const string ModuleVersion = "1.0.0";
+    private const string ModuleVersion = "1.1.0";
     private const string TerraformImage = "hashicorp/terraform@sha256:c7926feace05d0f7e73542842bf3945924e955a1f782cf000ccbb8d18fa42d77";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 

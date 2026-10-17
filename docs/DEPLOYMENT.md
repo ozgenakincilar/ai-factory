@@ -1,9 +1,10 @@
 # Deployment — M13A
 
-Status: **M13A.1 implemented** on 2026-10-17 (deployment engine, Azure module, release packages, operator
-commands). The first live Azure staging deployment waits for the operator bootstrap
-(`scripts/Initialize-AzureStaging.ps1`), which creates and authorizes the deployment identity and must
-be run by the user (the agent's permission policy does not allow it to grant cloud roles).
+Status: **M13A.1 implemented and live** on 2026-10-17 (deployment engine, Azure module, release packages,
+operator commands). The StockFlow release of ozgenakincilar/stockflow#1 runs on Azure staging at
+https://stock-flow-staging-9b228545.azurewebsites.net (France Central), deployed through two
+human-approved plans. The bootstrap (`scripts/Initialize-AzureStaging.ps1`) was run by the user: the
+agent's permission policy does not allow it to grant cloud roles.
 Durable deployment jobs with approval in the Product Workspace are **M13A.2**; the Factory-managed hosting
 path is **M13A.3**.
 
@@ -32,13 +33,17 @@ keep the free-account services (user decision when it comes to that).
 
 ## Pieces
 
-- **Module** `deploy/azure/app-service-postgres` 1.0.0, registered with a content hash in
+- **Module** `deploy/azure/app-service-postgres` 1.0.0 and `-1.1.0` (current), registered with a content hash in
   `deploy/registry.json` and refused when changed (`FileSystemModuleCatalog`). Terraform **1.16.5**
   (image pinned by digest), azurerm **5.8.0**, random **3.9.1**; `.terraform.lock.hcl` pins the provider
   hashes. The database password is an ephemeral value written only through write-only arguments
   (`administrator_password_wo`, Key Vault `value_wo`), so it is never stored in a plan or the state. The
-  web app reads the connection string as a Key Vault reference with its system-assigned identity. Key
-  Vault uses access policies because the deployment identity may not create role assignments.
+  web app reads the connection string as a Key Vault reference. Key Vault uses access policies because the
+  deployment identity may not create role assignments. **1.1.0** resolves the reference with a
+  user-assigned identity whose access policy exists before the web app is created: with 1.0.0's
+  system-assigned identity the policy could only follow the app, App Service kept the first, denied
+  resolution (`AccessToKeyVaultDenied`), and a restart did not clear it. 1.1.0 keeps every 1.0.0
+  resource, so the upgrade destroys nothing.
 - **Release package** (`SandboxReleaseBuilder`): in the offline sandbox, the evidence's base and final
   commits are re-created from the hash-verified template and the evidence diff and must equal the
   evidence ids; then `dotnet publish` of the API. The output is untrusted: only regular files with safe
@@ -98,8 +103,28 @@ keep the free-account services (user decision when it comes to that).
    (`f60e31b2829460d404e11478a291ec602dcac4015546672ebf4b31367be284bf`).
 6. Full suite with `-IncludeKeycloak -IncludeDocker` (fresh browser tokens): Keycloak pass **4 passed**,
    remaining pass **1024 passed, 0 failed, 1 skipped** (the paid live Developer Agent test).
-7. **Not yet executed:** the bootstrap, a live plan and apply, and the health check (they need the
-   deployment identity).
+7. **Bootstrap** (run by the user after three script fixes: a helper named `Az` recursed into itself
+   because PowerShell names are case-insensitive; `az.cmd` runs through cmd.exe, which rejected a
+   `length(@)` query; West Europe refused the storage account, see above): resource groups
+   `rg-stock-flow-staging-frc` and `rg-factory-tfstate-frc`, storage account `stfactorytf084fd9cca72d`
+   with container `tfstate-stock-flow-staging`, service principal `factory-deploy-stock-flow-staging`
+   with exactly two role assignments (Contributor on the target resource group, Storage Blob Data
+   Contributor on that container; checked with `az role assignment list`), secret until 2026-11-16, budget
+   `factory-monthly` USD 5 (listed by `az consumption budget list`).
+8. **Live plan 1** (module 1.0.0): release built from evidence commit `1bd942e` →
+   `99d27dd27fe7d89d23b2fea3bd54a9750b54ad544731a3d89ebcc4825d0233e2` (2,520,439 bytes); state reached
+   through Entra ID; 9 to add, 0 to change, 0 to destroy; write-only values shown only as
+   "(write-only attribute)". Binding `0220be7bb2c1569b565c552130dc0038fdd518eb5b80aa1e03da6e96035ddb2d`
+   approved by the user in chat; applied; `/health` 200 `{"status":"ok"}` on the first attempt. Independent
+   check: the four resources exist in France Central, `FACTORY_RELEASE_SHA256` equals the release hash,
+   PostgreSQL B1MS 17 Ready with 32 GB. **But** the Key Vault reference status was
+   `AccessToKeyVaultDenied` (the health endpoint does not touch the database, so it could not notice).
+9. **Live plan 2** (module 1.1.0, `Microsoft.ManagedIdentity` registered by the operator): the release was
+   rebuilt from the same evidence with the **identical hash** (deterministic build); 2 to add, 5 to change
+   (four only the module tag, the web app its identities), 0 to destroy. Binding
+   `03a1018ab690809d00a2ac2b3806fbbe862ff773ed4296829d7a77407de3dc19` approved by the user; applied; health
+   200 on the first attempt; the Key Vault reference status is **Resolved** (user-assigned identity).
+   Both `apply-*.json` evidence files hold binding, approval, URL and health, and no credentials.
 
 ## Limits
 
@@ -114,5 +139,7 @@ keep the free-account services (user decision when it comes to that).
 - Terraform containers have unrestricted outbound network access (Azure and the provider registry).
 - The starter template and StockFlow have no EF migrations and no static web hosting yet: the
   deployment serves the API and `/health`; the Angular app and database schema creation are M14 work.
+- The health check does not cover configuration: a database-backed health endpoint (M14) and a Key Vault
+  reference status check in the deployment verification (M13A.2) are still missing.
 - No automatic rollback: a failed apply leaves Terraform's partial state; a new plan reconciles it.
   Deleting the target is a manual, explicitly authorized operation.

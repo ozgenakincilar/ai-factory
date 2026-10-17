@@ -211,6 +211,21 @@ public class DeploymentModuleCatalogTests
     }
 
     [Fact]
+    public void Version110_ResolvesKeyVaultReferencesWithAnIdentityGrantedBeforeTheApp()
+    {
+        var catalog = new FileSystemModuleCatalog(Path.Combine(DeploymentSamples.RepositoryRoot(), "deploy"));
+        var (module, files) = catalog.Load("azure-app-service-postgres", "1.1.0");
+        Assert.Equal("azure/app-service-postgres-1.1.0", module.Directory);
+        var main = files.Single(f => f.Path == "main.tf").Content;
+        Assert.Contains("key_vault_reference_identity_id = azurerm_user_assigned_identity.api.id", main);
+        Assert.Contains("depends_on = [azurerm_key_vault_access_policy.api_identity]", main);
+        // An upgrade from 1.0.0 keeps every 1.0.0 resource, so it destroys nothing.
+        var (_, previous) = catalog.Load("azure-app-service-postgres", "1.0.0");
+        foreach (var resource in System.Text.RegularExpressions.Regex.Matches(previous.Single(f => f.Path == "main.tf").Content, "resource \"[a-z_]+\" \"[a-z_]+\""))
+            Assert.Contains(resource.ToString()!, main);
+    }
+
+    [Fact]
     public void ChangedModules_AreRefused()
     {
         var root = Directory.CreateTempSubdirectory("factory-modules-");
