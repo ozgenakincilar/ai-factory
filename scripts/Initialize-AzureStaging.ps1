@@ -70,8 +70,9 @@ if(-not $appId){ $appId = Invoke-AzCli ad app create --display-name $identityNam
 $principal = Invoke-AzCli ad sp list --filter "appId eq '$appId'" --query '[0].id' -o tsv
 if(-not $principal){ $principal = Invoke-AzCli ad sp create --id $appId --query id -o tsv }
 foreach($assignment in @(@('Contributor',$groupScope),@('Storage Blob Data Contributor',$containerScope))){
-    $existing = Invoke-AzCli role assignment list --assignee $principal --role $assignment[0] --scope $assignment[1] --query 'length(@)' -o tsv
-    if($existing -eq '0'){
+    # No parentheses in queries: az.cmd runs through cmd.exe, which breaks on them.
+    $existing = @(Invoke-AzCli role assignment list --assignee $principal --role $assignment[0] --scope $assignment[1] --query '[].id' -o tsv)
+    if(-not ($existing | Where-Object { $_ })){
         # A new service principal can take a short while to replicate.
         for($i=0;;$i++){
             if(-not (AzTry role assignment create --assignee-object-id $principal --assignee-principal-type ServicePrincipal --role $assignment[0] --scope $assignment[1] -o none).Exit){break}; if($i -ge 6){throw "Role assignment $($assignment[0]) failed."}; Start-Sleep -Seconds 10
